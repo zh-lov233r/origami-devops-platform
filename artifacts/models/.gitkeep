@@ -1,0 +1,5 @@
+# 作用：保留模型产物目录，后续存放 PyTorch、ONNX 或量化模型文件。
+# 中文：保留模型产物目录，用于后续存放训练模型和导出模型。
+# English: Keeps the model artifact directory for future trained and exported models.
+# 中文：保留模型产物目录，后续存放导出的 ONNX、PyTorch checkpoint 等文件。
+# English: Keeps the model artifacts directory for future ONNX exports, PyTorch checkpoints, and related files.

@@ -1,0 +1,14 @@
+# 作用：定义 Prometheus 抓取 mini PIC 2.0 API 指标的本地配置。
+
+# 中文：配置 Prometheus 抓取 Origami API 指标的规则。
+# English: Configures Prometheus scrape rules for Origami API metrics.
+# 中文：Prometheus 抓取配置，用于收集 Origami API 的观测指标。
+# English: Prometheus scrape configuration for collecting Origami API observability metrics.
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: origami-api
+    static_configs:
+      - targets: ["api:8000"]

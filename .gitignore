@@ -1,0 +1,19 @@
+# 作用：忽略 Python 缓存、虚拟环境和生成的模型/报告/benchmark 产物。
+
+# 中文：定义本项目需要忽略的缓存、虚拟环境和生成产物。
+# English: Defines cache, virtual environment, and generated artifact ignore rules.
+# 中文：仓库忽略规则，避免提交缓存、虚拟环境和生成的模型/报告产物。
+# English: Repository ignore rules for caches, virtual environments, and generated model/report artifacts.
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+artifacts/**/*.json
+artifacts/**/*.jsonl
+artifacts/**/*.onnx
+artifacts/**/*.pt
+artifacts/**/*.pth
+artifacts/**/*.png
+artifacts/**/*.pdf

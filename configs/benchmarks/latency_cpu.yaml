@@ -1,0 +1,20 @@
+# 作用：定义本地 CPU latency benchmark 的步数、输出路径和模块延迟目标。
+
+# 中文：定义本地 CPU 延迟 benchmark 的步数、输出路径和模块目标耗时。
+# English: Defines local CPU latency benchmark steps, output path, and per-module latency targets.
+# 中文：CPU 延迟基准测试配置，定义测量步数、输出路径和各模块目标延迟。
+# English: CPU latency benchmark config defining measured steps, output path, and per-module latency targets.
+
+benchmark:
+  name: latency-cpu-smoke
+  warmup_steps: 2
+  measured_steps: 20
+  output_path: artifacts/benchmarks/latency_cpu.json
+
+targets_ms:
+  amdc: 2.0
+  stum: 1.0
+  htd_irl: 2.0
+  grpo: 10.0
+  seom: 0.5
+  crl_mrs: 2.0

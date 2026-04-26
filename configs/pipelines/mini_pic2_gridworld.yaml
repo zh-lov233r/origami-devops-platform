@@ -1,0 +1,25 @@
+# 作用：定义 mini PIC 2.0 GridWorld smoke pipeline 的默认运行配置。
+
+# 中文：定义 mini PIC 2.0 GridWorld smoke pipeline 的运行参数。
+# English: Defines runtime parameters for the mini PIC 2.0 GridWorld smoke pipeline.
+# 中文：mini PIC 2.0 GridWorld smoke pipeline 配置，定义运行步数、模块参数和 audit 输出。
+# English: Mini PIC 2.0 GridWorld smoke pipeline config defining run size, module settings, and audit output.
+
+run:
+  name: mini-pic2-gridworld-smoke
+  environment: gridworld_danger
+  episodes: 1
+  max_steps: 10
+
+pipeline:
+  stum:
+    low_threshold: 0.10
+    high_threshold: 0.20
+  grpo:
+    group_size: 4
+  seom:
+    strict_mode: true
+
+audit:
+  enabled: true
+  path: artifacts/audit/latest.jsonl

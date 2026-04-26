@@ -1,0 +1,5 @@
+# 作用：保留 benchmark 产物目录，后续存放延迟和质量评估结果。
+# 中文：保留 benchmark 产物目录，用于后续存放延迟和质量评测结果。
+# English: Keeps the benchmark artifact directory for future latency and quality results.
+# 中文：保留 benchmark 产物目录，后续存放延迟和质量基准测试结果。
+# English: Keeps the benchmark artifacts directory for future latency and quality benchmark results.

@@ -1,0 +1,5 @@
+# 作用：保留 artifacts 根目录，用于放置运行生成的模型、报告、benchmark 和 audit 产物。
+# 中文：保留 artifacts 目录，用于存放生成的模型、报告、benchmark 和审计产物。
+# English: Keeps the artifacts directory for generated models, reports, benchmarks, and audit outputs.
+# 中文：保留 artifacts 根目录，供生成模型、报告、benchmark 和 audit 产物使用。
+# English: Keeps the artifacts root directory for generated models, reports, benchmarks, and audit outputs.
