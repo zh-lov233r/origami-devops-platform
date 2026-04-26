@@ -1,5 +1,2 @@
-# 作用：保留报告产物目录，后续存放 benchmark、stress test 和技术报告。
-# 中文：保留报告产物目录，用于后续存放实验和架构报告。
-# English: Keeps the report artifact directory for future experiment and architecture reports.
 # 中文：保留报告产物目录，后续存放 benchmark、audit 和实验总结报告。
 # English: Keeps the report artifacts directory for future benchmark, audit, and experiment summary reports.

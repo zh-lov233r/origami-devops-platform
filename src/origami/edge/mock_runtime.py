@@ -1,5 +1,5 @@
-"""中文：边缘部署 mock runtime，模拟 Jetson Orin Nano 的推理预算和运行状态。
-
+"""
+中文：边缘部署 mock runtime，模拟 Jetson Orin Nano 的推理预算和运行状态。
 English: Edge deployment mock runtime that simulates Jetson Orin Nano inference budgets and runtime readiness.
 """
 

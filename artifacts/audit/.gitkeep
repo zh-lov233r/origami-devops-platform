@@ -1,5 +1,2 @@
-# 作用：保留 audit 产物目录，后续存放审计链和验证报告。
-# 中文：保留审计产物目录，用于后续存放 audit trail 日志。
-# English: Keeps the audit artifact directory for future audit trail logs.
 # 中文：保留 audit 产物目录，后续存放不可变审计日志和验证结果。
 # English: Keeps the audit artifacts directory for future immutable audit logs and verification results.

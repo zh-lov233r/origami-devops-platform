@@ -1,5 +1,5 @@
-"""中文：命令行主入口，提供 smoke、benchmark、export、edge mock 和 audit verify 命令。
-
+"""
+中文：命令行主入口，提供 smoke、benchmark、export、edge mock 和 audit verify 命令。
 English: Main command-line entrypoint for smoke, benchmark, export, edge mock, and audit verify commands.
 """
 

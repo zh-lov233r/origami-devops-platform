@@ -1,5 +1,5 @@
-"""中文：mini PIC 2.0 六阶段 pipeline 运行时，串联 AMDC、STUM、HTD-IRL、GRPO、SEOM 和 CRL-MRS。
-
+"""
+中文：mini PIC 2.0 六阶段 pipeline 运行时，串联 AMDC、STUM、HTD-IRL、GRPO、SEOM 和 CRL-MRS。
 English: Mini PIC 2.0 six-stage pipeline runtime connecting AMDC, STUM, HTD-IRL, GRPO, SEOM, and CRL-MRS.
 """
 

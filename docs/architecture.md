@@ -1,8 +1,3 @@
-<!-- 作用：记录 mini PIC 2.0 DevOps 平台的架构分层、运行流和目录职责。 -->
-
-<!-- 中文：说明 mini PIC 2.0 DevOps 平台的整体架构、运行流和目录职责。 -->
-<!-- English: Describes the mini PIC 2.0 DevOps platform architecture, runtime flow, and folder responsibilities. -->
-
 <!-- 中文：架构说明文档，描述平台运行流、目录职责和 MVP 里程碑。 -->
 <!-- English: Architecture documentation describing runtime flow, folder responsibilities, and MVP milestones. -->
 

@@ -1,7 +1,3 @@
-# 作用：定义本地 API 服务和 Prometheus 的容器化启动方式。
-
-# 中文：定义本地 API 和 Prometheus 服务，支持平台一键启动。
-# English: Defines local API and Prometheus services for one-command platform startup.
 # 中文：本地服务编排配置，用于启动 API 控制面和 Prometheus 观测服务。
 # English: Local service orchestration for the API control plane and Prometheus observability service.
 

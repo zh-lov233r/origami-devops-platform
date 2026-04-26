@@ -1,5 +1,5 @@
-"""中文：延迟 benchmark runner，反复执行 pipeline 并汇总各模块平均耗时。
-
+"""
+中文：延迟 benchmark runner，反复执行 pipeline 并汇总各模块平均耗时。
 English: Latency benchmark runner that repeatedly executes the pipeline and summarizes per-module average timings.
 """
 

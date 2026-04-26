@@ -1,8 +1,3 @@
-<!-- 作用：说明 mini PIC 2.0 DevOps 平台的目标、快速启动命令和整体入口。 -->
-
-<!-- 中文：项目入口文档，说明 mini PIC 2.0 DevOps 平台的目标、启动方式和工作流。 -->
-<!-- English: Project entry document describing the mini PIC 2.0 DevOps platform goals, startup commands, and workflow. -->
-
 <!-- 中文：项目入口说明，介绍 mini PIC 2.0 DevOps 平台的目标、快速启动命令和架构入口。 -->
 <!-- English: Project entrypoint documentation describing the mini PIC 2.0 DevOps platform, quick-start commands, and architecture links. -->
 

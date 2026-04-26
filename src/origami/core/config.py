@@ -1,5 +1,5 @@
-"""中文：配置加载工具，负责从 YAML 文件读取可复现实验和运行设置。
-
+"""
+中文：配置加载工具，负责从 YAML 文件读取可复现实验和运行设置。
 English: Configuration loading utilities for reading reproducible experiment and runtime settings from YAML files.
 """
 
