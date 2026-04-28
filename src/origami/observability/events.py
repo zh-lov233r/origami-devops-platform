@@ -1,5 +1,5 @@
-"""中文：pipeline 结构化事件定义，用于记录模块名和延迟等观测数据。
-
+"""
+中文：pipeline 结构化事件定义，用于记录模块名和延迟等观测数据。
 English: Structured pipeline event definitions for recording module names, latency, and related telemetry.
 """
 

@@ -17,10 +17,19 @@ def run_latency_benchmark(steps: int = 20) -> dict[str, object]:
     for step in range(steps):
         result = pipeline.step(
             {
+                "mission_type": "carry_go_delivery",
                 "position": [step, 0],
                 "target": [step + 1, 1],
                 "sensor_bias": 0.01,
-                "fleet_context": {"nearby_robots": step % 3 == 0},
+                "payload_kg": 2.0,
+                "payload_locked": True,
+                "battery_pct": max(20, 90 - step),
+                "nearest_human_distance_m": 1.5,
+                "fleet_context": {
+                    "nearby_robots": step % 3 == 0,
+                    "corridor_occupied": step % 7 == 0,
+                    "elevator_queue": 0,
+                },
             }
         )
         for event in result.events:

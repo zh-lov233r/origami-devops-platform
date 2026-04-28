@@ -18,9 +18,14 @@ from origami.export.onnx_export import export_placeholder
 def run_smoke() -> None:
     pipeline = PIC2Pipeline(run_id="smoke")
     observation = {
+        "mission_type": "carry_go_delivery",
         "position": [0, 0],
         "target": [1, 1],
         "sensor_bias": 0.02,
+        "payload_kg": 2.0,
+        "payload_locked": True,
+        "battery_pct": 80,
+        "nearest_human_distance_m": 2.0,
         "fleet_context": {"nearby_robots": 0},
     }
     result = pipeline.step(observation)

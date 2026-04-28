@@ -73,6 +73,8 @@ class PIC2Pipeline:
                 "sigma_total": uncertainty.get("sigma_total"),
                 "stum_gate": uncertainty.get("stum_gate"),
                 "seom_passed": checked_action.get("seom_passed"),
+                "seom_violations": checked_action.get("violations", []),
+                "fleet_adjustment": final_action.get("fleet_adjustment"),
             },
         )
         audit_valid, _ = self.audit.verify()
