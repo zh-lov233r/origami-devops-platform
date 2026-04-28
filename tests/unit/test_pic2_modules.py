@@ -27,6 +27,57 @@ def test_amdc_calibrates_sensor_map_and_tracks_residual() -> None:
     assert result["amdc_residual"] > 0.0
 
 
+def test_amdc_calibrates_carry_go_required_drifts() -> None:
+    calibrator = AMDCCalibrator(alpha=0.0)
+
+    result = calibrator.calibrate(
+        {
+            "floor_mu_observed": 0.35,
+            "elevator_expected_door_delay_s": 2.3,
+            "elevator_observed_door_delay_s": 4.2,
+            "camera_lux_reference": 500.0,
+            "camera_lux_current": 150.0,
+            "camera_flicker_hz": 100.0,
+            "camera_sharpness": 0.75,
+            "depth_reading_m": 2.4,
+            "depth_reference_m": 2.0,
+            "imu_vibration_rms": 0.6,
+            "imu_yaw_rate_bias_dps": 1.2,
+            "wheel_odometry_delta_m": 1.3,
+            "visual_odometry_delta_m": 1.0,
+            "payload_scale_reading_kg": 10.3,
+            "payload_reference_kg": 10.0,
+            "temperature_c": 25.0,
+        }
+    )
+
+    carry_go = result["carry_go_calibration"]
+
+    assert set(carry_go) == {
+        "floor_friction",
+        "elevator_timing",
+        "camera_depth",
+        "imu_vibration",
+        "payload_scale",
+    }
+    assert result["floor_friction_mu"] == 0.35
+    assert result["speed_scale"] < 1.0
+    assert result["elevator_door_delay_s"] == 4.2
+    assert result["depth_reading_m"] == 2.0
+    assert result["odometry_delta_m"] == 1.0
+    assert result["payload_kg"] == 10.0
+    assert result["payload_over_limit"] is False
+    assert result["perception_uncertainty"] > 0.0
+    assert result["localization_uncertainty"] > 0.0
+    assert result["amdc_status"]["carry_go_drift_types"] == [
+        "floor_friction",
+        "elevator_timing",
+        "camera_depth",
+        "imu_vibration",
+        "payload_scale",
+    ]
+
+
 def test_stum_escalates_when_sensor_blackout_occurs() -> None:
     gate = STUMGate()
 
@@ -94,4 +145,3 @@ def test_crl_mrs_yields_to_corridor_conflict() -> None:
     assert coordinated["move"] == "hold"
     assert coordinated["fleet_adjustment"] == "yield_corridor"
     assert "yield_corridor" in coordinated["crl_mrs"]["cooperation_events"]
-
