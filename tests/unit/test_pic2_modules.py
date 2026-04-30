@@ -163,6 +163,52 @@ def test_htd_irl_builds_carry_go_task_graph_and_replans() -> None:
     assert "request_elevator" in result["task_plan"]
     assert result["replan_level"] == 3
     assert result["route_strategy"] == "alternate_route"
+    assert "blocked_path" in result["replan_reasons"]
+    assert result["task_status"]["localize"] == "active"
+    assert result["htd_irl"]["candidate_count"] > 0
+
+
+def test_htd_irl_tracks_task_progress_and_candidates() -> None:
+    planner = HTDIRLPlanner()
+
+    result = planner.plan(
+        {
+            "mission_type": "carry_go_delivery",
+            "completed_subtasks": ["localize", "navigate_to_pickup"],
+            "payload_locked": True,
+        }
+    )
+
+    assert result["current_subtask"] == "verify_payload"
+    assert result["task_status"]["localize"] == "completed"
+    assert result["task_status"]["verify_payload"] == "active"
+    assert result["task_progress"] > 0.0
+    assert {"move": "hold", "speed_mps": 0.0} in result["candidate_actions"]
+    assert result["htd_irl"]["active_subtask"] == "verify_payload"
+
+
+def test_htd_irl_safe_replan_for_battery_or_payload_risk() -> None:
+    planner = HTDIRLPlanner()
+
+    low_battery = planner.plan(
+        {
+            "mission_type": "carry_go_delivery",
+            "battery_pct": 10.0,
+        }
+    )
+    payload_risk = planner.plan(
+        {
+            "mission_type": "carry_go_delivery",
+            "payload_over_limit": True,
+        }
+    )
+
+    assert low_battery["replan_level"] == 1
+    assert low_battery["route_strategy"] == "safe_halt_or_return"
+    assert low_battery["candidate_actions"][0]["move"] == "return_to_dock"
+    assert "return_to_dock" in low_battery["recovery_actions"]
+    assert payload_risk["replan_level"] == 1
+    assert payload_risk["candidate_actions"] == [{"move": "hold", "speed_mps": 0.0}]
 
 
 def test_grpo_prefers_action_that_reduces_distance() -> None:
@@ -172,6 +218,81 @@ def test_grpo_prefers_action_that_reduces_distance() -> None:
 
     assert action["move"] == "east"
     assert action["grpo"]["selected_advantage"] > 0
+    assert action["grpo"]["selected_breakdown"]["progress"] > 0
+    assert abs(sum(action["grpo"]["action_distribution"].values()) - 1.0) < 0.000001
+
+
+def test_grpo_returns_to_dock_on_low_battery() -> None:
+    policy = GRPOPolicy()
+
+    action = policy.decide(
+        {
+            "position": [0, 0],
+            "target": [3, 0],
+            "battery_pct": 10.0,
+            "sigma_total": 0.01,
+        }
+    )
+
+    assert action["move"] == "return_to_dock"
+    assert action["speed_mps"] <= 0.3
+    assert action["grpo"]["selected_reason"] == "low_battery_return"
+    assert "low_battery" in action["grpo"]["risk_flags"]
+
+
+def test_grpo_holds_for_near_human_or_payload_risk() -> None:
+    policy = GRPOPolicy()
+
+    near_human_action = policy.decide(
+        {
+            "position": [0, 0],
+            "target": [1, 0],
+            "nearest_human_distance_m": 0.2,
+            "sigma_total": 0.01,
+        }
+    )
+    payload_action = policy.decide(
+        {
+            "position": [0, 0],
+            "target": [1, 0],
+            "payload_over_limit": True,
+            "sigma_total": 0.01,
+        }
+    )
+
+    assert near_human_action["move"] == "hold"
+    assert near_human_action["grpo"]["selected_reason"] == "human_safety_hold"
+    assert "human_nearby" in near_human_action["grpo"]["risk_flags"]
+    assert payload_action["move"] == "hold"
+    assert payload_action["grpo"]["selected_reason"] == "payload_safety_hold"
+
+
+def test_grpo_adds_task_aligned_elevator_and_handoff_actions() -> None:
+    policy = GRPOPolicy()
+
+    elevator_action = policy.decide(
+        {
+            "current_subtask": "request_elevator",
+            "position": [0, 0],
+            "target": [0, 0],
+            "sigma_total": 0.01,
+        }
+    )
+    handoff_action = policy.decide(
+        {
+            "current_subtask": "handoff_payload",
+            "recipient_authenticated": True,
+            "position": [0, 0],
+            "target": [0, 0],
+            "sigma_total": 0.01,
+        }
+    )
+
+    assert elevator_action["move"] == "enter_elevator"
+    assert elevator_action["grpo"]["selected_reason"] == "task_aligned_elevator"
+    assert "enter_elevator@0.20" in elevator_action["grpo"]["action_distribution"]
+    assert handoff_action["move"] == "handoff_payload"
+    assert handoff_action["grpo"]["selected_reason"] == "task_aligned_handoff"
 
 
 def test_seom_holds_when_human_is_too_close() -> None:
@@ -289,3 +410,60 @@ def test_crl_mrs_yields_to_corridor_conflict() -> None:
     assert coordinated["move"] == "hold"
     assert coordinated["fleet_adjustment"] == "yield_corridor"
     assert "yield_corridor" in coordinated["crl_mrs"]["cooperation_events"]
+    assert "corridor_conflict" in coordinated["crl_mrs"]["conflict_events"]
+
+
+def test_crl_mrs_records_elevator_conflict_and_reservation() -> None:
+    coordinator = CRLMRSCoordinator()
+
+    coordinated = coordinator.coordinate(
+        {
+            "move": "enter_elevator",
+            "speed_mps": 0.2,
+            "grpo": {"selected_advantage": 0.5},
+            "state": {
+                "robot_id": "r1",
+                "current_subtask": "request_elevator",
+                "fleet_context": {
+                    "elevator_queue": True,
+                    "same_elevator_conflict": True,
+                    "same_elevator_conflict_with": "r2",
+                },
+            },
+        }
+    )
+
+    assert coordinated["move"] == "hold"
+    assert coordinated["fleet_adjustment"] == "avoid_elevator_conflict"
+    assert coordinated["reservation_request"]["resource"] == "elevator"
+    assert coordinated["reservation_request"]["status"] == "deferred"
+    assert "same_elevator_conflict" in coordinated["crl_mrs"]["conflict_events"]
+    assert coordinated["crl_mrs"]["conflict_graph"]["conflicts"][0]["resource"] == "elevator"
+
+
+def test_crl_mrs_can_claim_corridor_with_higher_priority() -> None:
+    coordinator = CRLMRSCoordinator()
+
+    coordinated = coordinator.coordinate(
+        {
+            "move": "east",
+            "speed_mps": 0.4,
+            "grpo": {"selected_advantage": 1.0},
+            "state": {
+                "robot_id": "urgent-bot",
+                "task_priority": 5.0,
+                "deadline_slack_s": 20.0,
+                "fleet_context": {
+                    "corridor_occupied": True,
+                    "corridor_occupied_by": "slow-bot",
+                    "corridor_peer_priority": 1.0,
+                },
+            },
+        }
+    )
+
+    assert coordinated["move"] == "east"
+    assert coordinated["fleet_adjustment"] == "claim_corridor_priority"
+    assert coordinated["reservation_request"]["status"] == "requested"
+    assert "claim_corridor" in coordinated["crl_mrs"]["resource_events"]
+    assert coordinated["crl_mrs"]["priority_score"] > 5.0

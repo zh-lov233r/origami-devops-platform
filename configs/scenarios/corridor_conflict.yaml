@@ -1,0 +1,37 @@
+# 中文：走廊冲突场景，验证 CRL-MRS 会让路或仲裁 corridor 资源。
+# English: Corridor conflict scenario verifying CRL-MRS yields or arbitrates corridor resources.
+
+version: 1
+id: corridor_conflict
+name: Corridor Conflict
+description: Another robot occupies the corridor while this robot has a route with clear progress.
+tags:
+  - fleet
+  - corridor
+  - crl_mrs
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [5, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  fleet_context:
+    nearby_robots: 1
+    corridor_occupied: true
+    corridor_occupied_by: robot-a
+    corridor_peer_priority: 5.0
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: true
+  audit_valid: true
+  expected_fleet_adjustment: yield_corridor
+  expected_conflict_events: [corridor_conflict]
+  expected_resource: corridor
+  reservation_status: deferred
+  notes: Corridor occupancy should be resolved by CRL-MRS yielding to the higher-priority peer.

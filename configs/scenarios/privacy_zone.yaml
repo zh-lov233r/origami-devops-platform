@@ -1,0 +1,35 @@
+# 中文：隐私区域场景，验证 SEOM 会关闭相机但不一定停止移动。
+# English: Privacy-zone scenario verifying SEOM disables camera without necessarily stopping motion.
+
+version: 1
+id: privacy_zone
+name: Privacy Zone
+description: Robot enters a camera-restricted zone while navigating to the dropoff area.
+tags:
+  - privacy
+  - seom
+  - compliance
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  current_zone: patient_room
+  privacy_zones: [patient_room]
+  camera_enabled: true
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: east
+  camera_enabled: false
+  seom_passed: false
+  audit_valid: true
+  expected_violations: [C05_privacy_zone]
+  gradient_mask: reduced
+  notes: Privacy rule should disable camera while preserving safe route progress.

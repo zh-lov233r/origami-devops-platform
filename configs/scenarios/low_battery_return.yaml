@@ -1,0 +1,34 @@
+# 中文：低电量回桩场景，验证 HTD-IRL/GRPO 会选择 return_to_dock。
+# English: Low-battery return scenario verifying HTD-IRL/GRPO select return_to_dock.
+
+version: 1
+id: low_battery_return
+name: Low Battery Return
+description: Robot is mid-delivery but battery falls below the return threshold.
+tags:
+  - energy
+  - replan
+  - return_to_dock
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [3, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 10.0
+  nearest_human_distance_m: 2.0
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: return_to_dock
+  max_final_speed_mps: 0.3
+  seom_passed: true
+  audit_valid: true
+  route_strategy: safe_halt_or_return
+  expected_replan_reasons: [battery_abort]
+  expected_recovery_actions: [return_to_dock, notify_operator]
+  expected_grpo_risk_flags: [low_battery]
+  notes: Low battery should become an intentional return action, not a safety violation.

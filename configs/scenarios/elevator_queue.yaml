@@ -1,0 +1,44 @@
+# 中文：电梯排队/冲突场景，验证 HTD-IRL 等待策略和 fleet 协调。
+# English: Elevator queue/conflict scenario verifying HTD-IRL waiting strategy and fleet coordination.
+
+version: 1
+id: elevator_queue
+name: Elevator Queue
+description: Robot reaches an elevator while queue state is uncertain and another robot may contend.
+tags:
+  - elevator
+  - fleet
+  - replan
+
+observation:
+  mission_type: carry_go_delivery
+  current_subtask: request_elevator
+  elevator_required: true
+  elevator_queue_unknown: true
+  elevator_capacity_remaining: 1
+  position: [0, 0]
+  target: [0, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  fleet_context:
+    nearby_robots: 1
+    elevator_queue: true
+    same_elevator_conflict: true
+    same_elevator_conflict_with: robot-b
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: false
+  audit_valid: true
+  route_strategy: elevator_wait
+  expected_replan_reasons: [elevator_queue_unknown]
+  expected_recovery_actions: [refresh_elevator_queue, reserve_next_car, hold_at_safe_distance]
+  expected_violations: [C09_elevator_capacity]
+  gradient_mask: reduced
+  expected_fleet_adjustment_any_of: [stagger_elevator, avoid_elevator_conflict, aware]
+  expected_conflict_events_any_of: [elevator_queue, same_elevator_conflict]
+  notes: Elevator contention should prefer waiting or SEOM hold rather than forcing entry.

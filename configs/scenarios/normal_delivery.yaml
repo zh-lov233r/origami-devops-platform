@@ -1,0 +1,39 @@
+# 中文：正常 Carry & Go 送货场景，作为端到端 baseline。
+# English: Normal Carry & Go delivery scenario used as the end-to-end baseline.
+
+version: 1
+id: normal_delivery
+name: Normal Delivery
+description: Robot carries a small locked payload through a clear route with healthy sensors.
+tags:
+  - baseline
+  - carry_go
+  - no_conflict
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 1]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  floor_mu_observed: 0.52
+  camera_lux_reference: 500.0
+  camera_lux_current: 480.0
+  camera_sharpness: 0.96
+  imu_vibration_rms: 0.08
+  payload_scale_reading_kg: 2.0
+  payload_reference_kg: 2.0
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: east
+  seom_passed: true
+  audit_valid: true
+  stum_gate_any_of: [LOW, MEDIUM]
+  route_strategy: normal
+  required_absent_violations: [C01_person_stop_300mm, C07_battery_return_15pct]
+  notes: Baseline should progress without safety override or fleet adjustment.

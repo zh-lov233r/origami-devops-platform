@@ -1,0 +1,36 @@
+# 中文：超重载荷场景，验证 AMDC 载荷校准会触发保守 hold。
+# English: Overweight payload scenario verifying AMDC payload calibration triggers conservative hold.
+
+version: 1
+id: payload_overweight
+name: Payload Overweight
+description: Payload scale reports a package above the 10 kg Carry & Go limit.
+tags:
+  - payload
+  - amdc
+  - seom
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 12.0
+  payload_locked: true
+  payload_scale_reading_kg: 12.0
+  payload_reference_kg: 12.0
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: false
+  audit_valid: true
+  route_strategy: safe_halt_or_return
+  expected_replan_reasons: [payload_safety]
+  expected_violations: [C06_payload_max_10kg, C11_payload_amdc_consistency]
+  expected_grpo_risk_flags: [payload_risk]
+  notes: Payload risk should be visible in AMDC, HTD-IRL, GRPO, and SEOM.

@@ -1,0 +1,38 @@
+# 中文：传感器黑屏场景，验证 STUM HIGH 会让系统停止并升级处理。
+# English: Sensor blackout scenario verifying STUM HIGH stops and escalates the system.
+
+version: 1
+id: sensor_blackout
+name: Sensor Blackout
+description: Perception becomes unavailable while the robot is still tasked to move.
+tags:
+  - uncertainty
+  - stum
+  - halt
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  sensor_blackout: true
+  state_age_s: 1.0
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: false
+  audit_valid: true
+  stum_gate: HIGH
+  autonomy_mode: HALT_OR_ESCALATE
+  route_strategy: alternate_route
+  expected_replan_reasons: [high_uncertainty]
+  expected_violations: [R1_uncertainty_halt]
+  gradient_mask: zero
+  notes: STUM uncertainty should stop autonomy before route progress.
