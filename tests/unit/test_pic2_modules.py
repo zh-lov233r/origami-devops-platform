@@ -87,6 +87,66 @@ def test_stum_escalates_when_sensor_blackout_occurs() -> None:
     assert result["autonomy_mode"] == "HALT_OR_ESCALATE"
 
 
+def test_stum_uses_carry_go_amdc_residuals_and_freshness() -> None:
+    gate = STUMGate()
+
+    result = gate.evaluate(
+        {
+            "mission_type": "carry_go_delivery",
+            "current_zone": "elevator",
+            "amdc_residuals": {
+                "camera_depth": 0.12,
+                "imu_vibration": 0.09,
+                "payload_scale": 0.02,
+            },
+            "perception_uncertainty": 0.03,
+            "localization_uncertainty": 0.04,
+            "sensor_age_s": {"camera": 3.0, "imu": 0.1},
+            "sensor_max_age_s": {"camera": 1.0, "imu": 1.0},
+            "state_age_s": 2.0,
+        }
+    )
+
+    assert result["sigma_spatial"] > 0.0
+    assert result["sigma_temporal"] > 0.0
+    assert result["stum_breakdown"]["spatial"]["carry_go_residual"] > 0.0
+    assert result["stum_breakdown"]["temporal"]["stale_sensor_count"] == 1.0
+    assert result["autonomy_mode"] in {"CAUTION", "HALT_OR_ESCALATE"}
+
+
+def test_stum_reports_model_disagreement_ece_and_prediction_interval() -> None:
+    gate = STUMGate()
+
+    result = gate.evaluate(
+        {
+            "ensemble_predictions": [0.2, 0.4, 0.8],
+            "route_ambiguity": 0.05,
+            "calibration_samples": [
+                {"confidence": 0.9, "correct": True},
+                {"confidence": 0.8, "correct": False},
+                {"confidence": 0.2, "correct": False},
+            ],
+            "prediction_value": 4.0,
+            "conformal_radius": 0.5,
+        }
+    )
+
+    assert result["sigma_model"] > 0.0
+    assert result["ece"] >= 0.0
+    assert result["prediction_interval"] == {
+        "lower": 3.5,
+        "value": 4.0,
+        "upper": 4.5,
+        "radius": 0.5,
+    }
+    assert result["stum_recommendation"] in {
+        "PROCEED_WITH_CAUTION",
+        "HALT_OR_ESCALATE",
+        "REPLAN_BEFORE_ACTION",
+        "ESTOP_AND_REQUEST_OPERATOR",
+    }
+
+
 def test_htd_irl_builds_carry_go_task_graph_and_replans() -> None:
     planner = HTDIRLPlanner()
 
@@ -128,6 +188,90 @@ def test_seom_holds_when_human_is_too_close() -> None:
     assert checked["move"] == "hold"
     assert checked["seom_passed"] is False
     assert "C01_person_stop_300mm" in checked["violations"]
+    assert checked["gradient_mask"] == "zero"
+    assert checked["requires_human_review"] is True
+
+
+def test_seom_reports_life_safety_penalty_and_audit() -> None:
+    checker = SEOMChecker()
+
+    checked = checker.check(
+        {
+            "move": "east",
+            "speed_mps": 0.4,
+            "state": {
+                "should_estop": True,
+                "stum_gate": "HIGH",
+                "nearest_human_distance_m": 2.0,
+            },
+        }
+    )
+
+    assert checked["move"] == "hold"
+    assert checked["speed_mps"] == 0.0
+    assert checked["emergency_stop"] is True
+    assert checked["safety_score"] == 0.0
+    assert checked["seom_penalty"] == checker.lambda_weight
+    assert checked["gradient_mask"] == "zero"
+    assert "C12_emergency_stop" in checked["life_safety_violations"]
+    assert checked["seom_audit"]["output_action"]["move"] == "hold"
+    assert checked["rule_details"]["C12_emergency_stop"]["life_safety"] is True
+
+
+def test_seom_handles_elevator_and_handoff_safety() -> None:
+    checker = SEOMChecker()
+
+    elevator_checked = checker.check(
+        {
+            "move": "enter_elevator",
+            "speed_mps": 0.3,
+            "state": {
+                "stum_gate": "LOW",
+                "nearest_human_distance_m": 2.0,
+                "elevator_capacity_remaining": 0,
+                "fleet_context": {"same_elevator_conflict": True},
+            },
+        }
+    )
+    handoff_checked = checker.check(
+        {
+            "move": "handoff_payload",
+            "speed_mps": 0.0,
+            "state": {
+                "stum_gate": "LOW",
+                "nearest_human_distance_m": 2.0,
+                "recipient_authenticated": False,
+            },
+        }
+    )
+
+    assert elevator_checked["move"] == "hold"
+    assert "C09_elevator_capacity" in elevator_checked["violations"]
+    assert elevator_checked["gradient_mask"] == "reduced"
+    assert handoff_checked["move"] == "hold"
+    assert "C10_handoff_auth" in handoff_checked["life_safety_violations"]
+    assert handoff_checked["requires_human_review"] is True
+
+
+def test_seom_returns_to_dock_on_low_battery() -> None:
+    checker = SEOMChecker()
+
+    checked = checker.check(
+        {
+            "move": "east",
+            "speed_mps": 0.4,
+            "state": {
+                "battery_pct": 10.0,
+                "stum_gate": "LOW",
+                "nearest_human_distance_m": 2.0,
+            },
+        }
+    )
+
+    assert checked["move"] == "return_to_dock"
+    assert checked["speed_mps"] <= 0.30
+    assert checked["gradient_mask"] == "reduced"
+    assert "C07_battery_return_15pct" in checked["operational_violations"]
 
 
 def test_crl_mrs_yields_to_corridor_conflict() -> None:

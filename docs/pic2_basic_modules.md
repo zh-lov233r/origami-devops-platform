@@ -10,19 +10,19 @@ This scaffold now has functional first-pass versions of all six PIC 2.0 modules.
 | Module | Basic Behavior |
 | --- | --- |
 | AMDC | Tracks generic sensor bias and Carry & Go drift: floor friction, elevator timing, camera/depth quality, IMU vibration, and payload scale. |
-| STUM | Computes spatial and temporal uncertainty, emits `LOW`, `MEDIUM`, or `HIGH` gate plus confidence. |
+| STUM | Fuses AMDC residuals, perception/localization uncertainty, sensor freshness, and model disagreement into `LOW`, `MEDIUM`, or `HIGH` gates. |
 | HTD-IRL | Builds a three-level Carry & Go delivery task graph and triggers local re-planning. |
 | GRPO | Scores candidate actions, normalizes them into group-relative advantages, selects the best action. |
-| SEOM | Enforces Carry & Go safety rules such as human distance, speed, payload, battery, privacy, and route safety. |
+| SEOM | Enforces Carry & Go safety rules with structured rule details, safety score, SEOM penalty, gradient mask, override action, and audit record. |
 | CRL-MRS | Adjusts actions for corridor and elevator conflicts and computes cooperative meta-reward. |
 
 ## Next Improvements
 
 1. Replace heuristic AMDC correction with per-sensor calibration models and fleet-shared calibration profiles for floor, elevator, camera, IMU, and payload stations.
-2. Train a small STUM ensemble and calibrate uncertainty with MAPIE conformal prediction.
+2. Train a real STUM ensemble and replace the current lightweight ECE/conformal helpers with MAPIE-backed calibration reports.
 3. Represent HTD-IRL task graphs with NetworkX and add measured re-plan latency.
 4. Replace GRPO scoring heuristics with rollout-based trajectory sampling and policy-gradient updates.
-5. Split SEOM rules into configurable vertical profiles such as warehouse, hotel, office, and hospital delivery.
+5. Split SEOM rules into configurable vertical profiles such as warehouse, hotel, office, and hospital delivery, then persist SEOM audit records into the platform audit chain.
 6. Expand CRL-MRS into a multi-agent simulator with deadlock, elevator contention, charging, and priority delivery metrics.
 7. Persist audit entries to JSONL or SQLite instead of keeping them only in memory.
 8. Export GRPO/STUM models to ONNX and benchmark PyTorch vs ONNX Runtime.
