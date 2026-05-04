@@ -1,0 +1,34 @@
+# 中文：载荷未锁定场景，验证 Carry & Go 必须在载荷锁定前保持停止。
+# English: Unlocked payload scenario verifying Carry & Go holds until payload lock is confirmed.
+
+version: 1
+id: payload_unlocked
+name: Payload Unlocked
+description: Robot carries a payload but the latch confirmation is missing.
+tags:
+  - payload
+  - lock
+  - seom
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: false
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: false
+  audit_valid: true
+  route_strategy: normal
+  expected_violations: [C03_payload_lock]
+  gradient_mask: reduced
+  requires_human_review: false
+  notes: Payload lock failure is operationally unsafe and should hold without life-safety escalation.

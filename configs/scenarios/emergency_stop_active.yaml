@@ -1,0 +1,35 @@
+# 中文：急停激活场景，验证 SEOM 会执行 life-safety hold。
+# English: Active emergency stop scenario verifying SEOM enforces a life-safety hold.
+
+version: 1
+id: emergency_stop_active
+name: Emergency Stop Active
+description: An external emergency stop is active while the robot would otherwise move normally.
+tags:
+  - emergency
+  - life_safety
+  - seom
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  emergency_stop_active: true
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: false
+  audit_valid: true
+  expected_violations: [C12_emergency_stop]
+  expected_life_safety_violations: [C12_emergency_stop]
+  gradient_mask: zero
+  requires_human_review: true
+  notes: Emergency stop must dominate route progress even when STUM uncertainty is low.

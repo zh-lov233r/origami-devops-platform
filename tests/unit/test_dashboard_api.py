@@ -70,9 +70,10 @@ def test_dashboard_jsonl_endpoints_return_record_payloads() -> None:
 def test_dashboard_run_actions_write_reports() -> None:
     scenario_payload = scenario_run()
     benchmark_payload = benchmark_run()
+    expected_scenario_count = len(list(Path("configs/scenarios").glob("*.yaml")))
 
     assert scenario_payload["quality_gate_passed"] is True
-    assert scenario_payload["total"] == 8
+    assert scenario_payload["total"] == expected_scenario_count
     assert benchmark_payload["quality_gate_passed"] is True
     assert benchmark_payload["audit_valid"] is True
     assert "history_record" in scenario_payload
@@ -94,8 +95,9 @@ def test_dashboard_history_endpoint_returns_recent_runs() -> None:
 
 def test_dashboard_scenario_config_endpoint_lists_yaml() -> None:
     payload = scenario_configs()
+    expected_scenario_count = len(list(Path("configs/scenarios").glob("*.yaml")))
 
     assert {"available", "path", "count", "scenarios"} <= set(payload)
     assert payload["available"] is True
-    assert payload["count"] >= 8
+    assert payload["count"] == expected_scenario_count
     assert "normal_delivery" in {scenario["id"] for scenario in payload["scenarios"]}

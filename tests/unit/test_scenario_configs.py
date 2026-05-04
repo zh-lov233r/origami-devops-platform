@@ -19,6 +19,11 @@ EXPECTED_IDS = {
     "elevator_queue",
     "corridor_conflict",
     "privacy_zone",
+    "payload_unlocked",
+    "door_crossing_without_hold",
+    "unsafe_route_marked",
+    "handoff_without_auth",
+    "emergency_stop_active",
 }
 
 

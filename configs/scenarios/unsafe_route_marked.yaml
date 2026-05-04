@@ -1,0 +1,38 @@
+# 中文：不安全路线场景，验证 HTD-IRL 重规划和 SEOM route-safe 规则。
+# English: Unsafe-route scenario verifying HTD-IRL replans and SEOM enforces route safety.
+
+version: 1
+id: unsafe_route_marked
+name: Unsafe Route Marked
+description: The planner context marks the current route unsafe because a corridor segment is blocked.
+tags:
+  - route
+  - replan
+  - seom
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [2, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  route_safe: false
+  blocked_paths:
+    - main_corridor
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: false
+  audit_valid: true
+  route_strategy: alternate_route
+  expected_replan_reasons: [blocked_path]
+  expected_recovery_actions: [mark_blocked_path, sample_alternate_route, publish_updated_plan]
+  expected_violations: [C08_route_safe]
+  gradient_mask: reduced
+  notes: Unsafe route metadata should trigger alternate-route planning and a safe hold.

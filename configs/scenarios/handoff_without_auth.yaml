@@ -1,0 +1,37 @@
+# 中文：未认证交付场景，验证 handoff 需要收件人认证。
+# English: Unauthenticated handoff scenario verifying recipient authentication is required.
+
+version: 1
+id: handoff_without_auth
+name: Handoff Without Auth
+description: Robot reaches payload handoff but the recipient has not authenticated.
+tags:
+  - handoff
+  - auth
+  - seom
+
+observation:
+  mission_type: carry_go_delivery
+  current_subtask: handoff_payload
+  payload_loaded: true
+  position: [1, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  recipient_authenticated: false
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: false
+  audit_valid: true
+  expected_violations: [C10_handoff_auth]
+  expected_life_safety_violations: [C10_handoff_auth]
+  gradient_mask: zero
+  requires_human_review: true
+  notes: Payload handoff must not proceed without recipient authentication.

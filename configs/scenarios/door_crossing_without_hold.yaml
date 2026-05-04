@@ -1,0 +1,35 @@
+# 中文：无门禁保持确认的过门场景，验证 SEOM 会阻止过门动作。
+# English: Door-crossing scenario without hold confirmation, verifying SEOM blocks movement.
+
+version: 1
+id: door_crossing_without_hold
+name: Door Crossing Without Hold
+description: Robot attempts to cross a controlled doorway without a 30 s hold confirmation.
+tags:
+  - access
+  - door
+  - seom
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  door_crossing: true
+  door_hold_confirmed: false
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: false
+  audit_valid: true
+  route_strategy: normal
+  expected_violations: [C04_door_hold_30s]
+  gradient_mask: reduced
+  notes: Door crossing must hold until the access hold confirmation is present.
