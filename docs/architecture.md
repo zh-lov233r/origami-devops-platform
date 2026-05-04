@@ -28,6 +28,7 @@ observation
 - `src/origami/training`: training entrypoints for policies and predictors.
 - `src/origami/evaluation`: smoke, regression, and stress evaluation.
 - `src/origami/benchmark`: latency and quality benchmark runners.
+- `src/origami/dashboard`: static artifact dashboard assets served by FastAPI.
 - `src/origami/export`: ONNX export and validation.
 - `src/origami/edge`: local edge deployment mock.
 - `src/origami/observability`: logs, metrics, traces, and structured events.
@@ -59,3 +60,21 @@ For easier review, the scenario runner also writes:
 - `artifacts/reports/scenario_report.md`: compact Markdown table for humans
 - `artifacts/events/scenario_events.jsonl`: per-module observability events
 - `artifacts/audit/scenario_audit.jsonl`: persisted audit-chain records
+
+## Artifact Dashboard
+
+The dashboard is a local FastAPI-served view over the latest generated artifacts. It does not need a frontend build step.
+
+```bash
+make quality
+make dashboard
+```
+
+Open `http://127.0.0.1:8000/dashboard`.
+
+The dashboard reads:
+
+- `GET /api/reports/scenario`
+- `GET /api/reports/benchmark`
+- `GET /api/events/scenario`
+- `GET /api/audit/scenario`

@@ -1,0 +1,131 @@
+<!--
+中文：Artifact Dashboard 页面，展示最近一次 scenario、benchmark、event 和 audit artifact。
+English: Artifact Dashboard page showing the latest scenario, benchmark, event, and audit artifacts.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Origami Artifact Dashboard</title>
+    <link rel="stylesheet" href="/dashboard/static/dashboard.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Origami Mini PIC 2.0</p>
+          <h1>Artifact Dashboard</h1>
+        </div>
+        <div class="topbar-actions">
+          <span id="generated-at" class="muted">Loading artifacts</span>
+          <span id="overall-gate" class="status-pill neutral">LOADING</span>
+        </div>
+      </header>
+
+      <main>
+        <section class="metric-grid" aria-label="Artifact status summary">
+          <article class="metric">
+            <span class="metric-label">Scenario Gate</span>
+            <strong id="scenario-gate">--</strong>
+            <small id="scenario-path">artifacts/reports/scenario_report.json</small>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Scenario Pass Rate</span>
+            <strong id="scenario-pass-rate">--</strong>
+            <small id="scenario-counts">--</small>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Benchmark Gate</span>
+            <strong id="benchmark-gate">--</strong>
+            <small id="benchmark-threshold">--</small>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Audit + Events</span>
+            <strong id="audit-event-count">--</strong>
+            <small id="audit-event-path">--</small>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <div class="panel panel-wide">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Carry & Go</p>
+                <h2>Scenario Results</h2>
+              </div>
+              <span id="scenario-total-chip" class="status-pill neutral">--</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Scenario</th>
+                    <th>Result</th>
+                    <th>Move</th>
+                    <th>STUM</th>
+                    <th>Route</th>
+                    <th>SEOM</th>
+                    <th>Fleet</th>
+                    <th>Violations</th>
+                  </tr>
+                </thead>
+                <tbody id="scenario-table-body">
+                  <tr>
+                    <td colspan="8" class="empty-cell">Loading</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Latency</p>
+                <h2>Module P95</h2>
+              </div>
+              <span id="latency-source" class="status-pill neutral">--</span>
+            </div>
+            <div id="latency-bars" class="bar-list"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Safety</p>
+                <h2>Violations</h2>
+              </div>
+              <span id="violation-chip" class="status-pill neutral">--</span>
+            </div>
+            <div id="violation-list" class="token-list"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Observability</p>
+                <h2>Event Flow</h2>
+              </div>
+              <span id="event-chip" class="status-pill neutral">--</span>
+            </div>
+            <div id="event-modules" class="module-grid"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Audit Trail</p>
+                <h2>Recent Records</h2>
+              </div>
+              <span id="audit-chip" class="status-pill neutral">--</span>
+            </div>
+            <div id="audit-records" class="audit-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/dashboard/static/dashboard.js"></script>
+  </body>
+</html>

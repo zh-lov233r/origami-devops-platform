@@ -1,10 +1,10 @@
-# 中文：常用开发命令入口，封装 lint、smoke、scenario、test、benchmark、quality 和部署 mock 命令。
-# English: Common developer command entrypoint wrapping lint, smoke, scenario, test, benchmark, quality, and deployment mock commands.
+# 中文：常用开发命令入口，封装 lint、smoke、scenario、test、benchmark、dashboard、quality 和部署 mock 命令。
+# English: Common developer command entrypoint wrapping lint, smoke, scenario, test, benchmark, dashboard, quality, and deployment mock commands.
 
 PYTHONPATH ?= src
 PYTHON ?= .venv/bin/python
 
-.PHONY: lint smoke scenario test benchmark quality export edge-mock audit-verify
+.PHONY: lint smoke scenario test benchmark dashboard quality export edge-mock audit-verify
 
 lint:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m ruff check src tests
@@ -20,6 +20,9 @@ test:
 
 benchmark:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m origami.cli.main benchmark
+
+dashboard:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m uvicorn origami.api.app:app --host 127.0.0.1 --port 8000
 
 quality: lint test scenario benchmark audit-verify
 

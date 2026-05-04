@@ -9,6 +9,7 @@ Local-first DevOps scaffold for a mini PIC 2.0 platform. The goal is to make rob
 
 - A six-stage `PIC2Pipeline` skeleton: AMDC, STUM, HTD-IRL, GRPO, SEOM, CRL-MRS.
 - A small CLI with smoke run, benchmark, export mock, edge mock, and audit verification commands.
+- A FastAPI artifact dashboard for scenario, benchmark, observability, and audit reports.
 - Config folders for pipeline, benchmark, and observability settings.
 - Stable locations for model code, environments, training, evaluation, exports, edge runtime, observability, and audit artifacts.
 
@@ -20,6 +21,15 @@ PYTHONPATH=src python3 -m origami.cli.main benchmark
 PYTHONPATH=src python3 -m origami.cli.main edge-mock
 PYTHONPATH=src python3 -m origami.cli.main audit-verify
 ```
+
+Run the dashboard after generating scenario and benchmark artifacts:
+
+```bash
+make quality
+make dashboard
+```
+
+Open `http://127.0.0.1:8000/dashboard`.
 
 ## Target Workflow
 
