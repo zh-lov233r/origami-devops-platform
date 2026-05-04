@@ -23,7 +23,10 @@ const ACTION_BUTTON_IDS = [
   "save-run-scenario-button",
 ];
 
+const TAB_IDS = ["dashboard", "scenario-builder", "run-history"];
+
 document.addEventListener("DOMContentLoaded", () => {
+  registerTabs();
   registerActionButtons();
   registerScenarioBuilder();
   loadDashboard();
@@ -102,6 +105,43 @@ function registerActionButtons() {
   document.getElementById("refresh-button").addEventListener("click", () => {
     refreshArtifacts();
   });
+}
+
+function registerTabs() {
+  document.querySelectorAll("[data-tab-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activateTab(button.dataset.tabTarget);
+    });
+  });
+
+  window.addEventListener("hashchange", () => {
+    activateTab(tabFromHash(), { updateHash: false });
+  });
+
+  activateTab(tabFromHash(), { updateHash: false });
+}
+
+function activateTab(tabId, options = {}) {
+  const selectedTab = TAB_IDS.includes(tabId) ? tabId : "dashboard";
+  const shouldUpdateHash = options.updateHash !== false;
+
+  document.querySelectorAll("[data-tab-target]").forEach((button) => {
+    const isActive = button.dataset.tabTarget === selectedTab;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+
+  document.querySelectorAll("[data-tab-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.tabPanel !== selectedTab;
+  });
+
+  if (shouldUpdateHash && window.location.hash !== `#${selectedTab}`) {
+    window.history.replaceState(null, "", `#${selectedTab}`);
+  }
+}
+
+function tabFromHash() {
+  return window.location.hash.replace("#", "");
 }
 
 function registerScenarioBuilder() {
@@ -262,6 +302,7 @@ function renderDashboard(
   const benchmarkReport = benchmarkPayload.available ? benchmarkPayload.data : null;
 
   renderSummary(scenarioPayload, benchmarkPayload, eventPayload, auditPayload);
+  renderVisualOverview(scenarioReport, historyPayload);
   renderScenarioLibrary(scenariosPayload);
   renderScenarioTable(scenarioReport);
   renderLatency(benchmarkReport, scenarioReport);
@@ -298,6 +339,147 @@ function renderSummary(scenarioPayload, benchmarkPayload, eventPayload, auditPay
   setText("audit-event-path", auditPayload.available && eventPayload.available ? "JSONL ready" : "JSONL missing");
 
   setPill("scenario-total-chip", scenario ? `${scenario.total} CASES` : "NO DATA", scenario ? "info" : "warn");
+}
+
+function renderVisualOverview(scenarioReport, historyPayload) {
+  renderOutcomeVisual(scenarioReport);
+  renderHistoryTrendVisual(historyPayload);
+  renderViolationVisual(scenarioReport);
+}
+
+function renderOutcomeVisual(report) {
+  const container = document.getElementById("outcome-visual");
+  if (!report?.scenarios?.length) {
+    setPill("outcome-chip", "NO DATA", "warn");
+    container.innerHTML = `<div class="notice">No scenario report available</div>`;
+    return;
+  }
+
+  const passed = Number(report.passed || 0);
+  const failed = Number(report.failed || 0);
+  const total = Math.max(1, Number(report.total || report.scenarios.length));
+  const passedWidth = Math.max(0, Math.min(100, (passed / total) * 100));
+  const failedWidth = Math.max(0, 100 - passedWidth);
+  const rows = report.scenarios
+    .slice(0, 8)
+    .map((scenario) => {
+      const kind = scenario.passed ? "pass" : "fail";
+      const width = scenario.passed ? 100 : 45;
+      return `
+        <div class="scenario-mini-row">
+          <div class="scenario-mini-header">
+            <span>${escapeHtml(scenario.id)}</span>
+            <span>${scenario.passed ? "PASS" : "FAIL"}</span>
+          </div>
+          <div class="mini-track">
+            <div class="mini-fill ${kind}" style="width: ${width}%"></div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  setPill("outcome-chip", `${passed}/${total} PASS`, failed ? "fail" : "pass");
+  container.innerHTML = `
+    <div class="stacked-bar" aria-label="Scenario pass fail split">
+      <div class="stacked-segment pass" style="width: ${passedWidth}%"></div>
+      <div class="stacked-segment fail" style="width: ${failedWidth}%"></div>
+    </div>
+    <div class="outcome-legend">
+      <span class="legend-item"><span class="legend-dot pass"></span>${passed} passed</span>
+      <span class="legend-item"><span class="legend-dot fail"></span>${failed} failed</span>
+      <span class="legend-item">${formatPercent(report.pass_rate)} pass rate</span>
+    </div>
+    <div class="scenario-mini-list">${rows}</div>
+  `;
+}
+
+function renderHistoryTrendVisual(historyPayload) {
+  const container = document.getElementById("history-trend-visual");
+  const records = (historyPayload?.records || [])
+    .slice()
+    .reverse()
+    .filter((record) => typeof record.max_module_p95_ms === "number")
+    .slice(-18);
+
+  setPill("trend-chip", `${records.length} POINTS`, records.length >= 2 ? "info" : "warn");
+
+  if (records.length < 2) {
+    container.innerHTML = `<div class="notice">Run scenario or benchmark a few times to draw a trend</div>`;
+    return;
+  }
+
+  const values = records.map((record) => numberOrZero(record.max_module_p95_ms));
+  const maxValue = Math.max(...values, 1);
+  const latest = records[records.length - 1];
+  const failedCount = records.filter((record) => record.quality_gate_passed === false).length;
+  const points = values
+    .map((value, index) => {
+      const x = 12 + (index / Math.max(1, records.length - 1)) * 276;
+      const y = 128 - (value / maxValue) * 104;
+      return `${roundForSvg(x)},${roundForSvg(y)}`;
+    })
+    .join(" ");
+  const circles = records
+    .map((record, index) => {
+      const value = numberOrZero(record.max_module_p95_ms);
+      const x = 12 + (index / Math.max(1, records.length - 1)) * 276;
+      const y = 128 - (value / maxValue) * 104;
+      const kind = record.quality_gate_passed === false ? "fail" : "";
+      return `<circle class="trend-point ${kind}" cx="${roundForSvg(x)}" cy="${roundForSvg(y)}" r="3.8"></circle>`;
+    })
+    .join("");
+
+  container.innerHTML = `
+    <svg class="trend-svg" viewBox="0 0 300 150" role="img" aria-label="Max module p95 latency trend">
+      <line class="trend-axis" x1="12" y1="128" x2="288" y2="128"></line>
+      <line class="trend-axis" x1="12" y1="24" x2="12" y2="128"></line>
+      <text class="trend-label" x="14" y="20">${formatNumber(maxValue)} ms</text>
+      <text class="trend-label" x="222" y="144">latest</text>
+      <polyline class="trend-line" points="${points}"></polyline>
+      ${circles}
+    </svg>
+    <div class="trend-metrics">
+      <span class="trend-metric">latest ${formatNumber(latest.max_module_p95_ms)} ms</span>
+      <span class="trend-metric">max ${formatNumber(maxValue)} ms</span>
+      <span class="trend-metric">${failedCount} failed gates</span>
+    </div>
+  `;
+}
+
+function renderViolationVisual(report) {
+  const container = document.getElementById("violation-visual");
+  const counts = report?.summary?.violation_counts || {};
+  const entries = Object.entries(counts).sort((left, right) => Number(right[1]) - Number(left[1]));
+
+  setPill("violation-visual-chip", entries.length ? `${entries.length} TYPES` : "CLEAR", entries.length ? "warn" : "pass");
+
+  if (!entries.length) {
+    container.innerHTML = `<span class="token good">No violations in latest scenario report</span>`;
+    return;
+  }
+
+  const maxCount = Math.max(...entries.map(([, count]) => Number(count)), 1);
+  container.innerHTML = `
+    <div class="violation-visual-list">
+      ${entries
+        .map(([name, count]) => {
+          const width = Math.max(6, (Number(count) / maxCount) * 100);
+          return `
+            <div class="violation-visual-row">
+              <div class="violation-visual-header">
+                <span>${escapeHtml(name)}</span>
+                <span>${count}</span>
+              </div>
+              <div class="violation-track">
+                <div class="violation-fill" style="width: ${width}%"></div>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
 }
 
 function deriveOverallGate(scenarioPayload, benchmarkPayload, auditPayload) {
@@ -634,6 +816,10 @@ function formatNumber(value) {
 
 function numberOrZero(value) {
   return typeof value === "number" && !Number.isNaN(value) ? value : 0;
+}
+
+function roundForSvg(value) {
+  return Number(value).toFixed(2);
 }
 
 function formatTimestamp(value) {

@@ -35,8 +35,38 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
         <span id="action-status" aria-live="polite">Ready</span>
       </div>
 
+      <nav class="tabbar" aria-label="Dashboard sections">
+        <button
+          id="tab-dashboard"
+          class="tab-button active"
+          type="button"
+          data-tab-target="dashboard"
+          aria-pressed="true"
+        >
+          Dashboard
+        </button>
+        <button
+          id="tab-scenario-builder"
+          class="tab-button"
+          type="button"
+          data-tab-target="scenario-builder"
+          aria-pressed="false"
+        >
+          Scenario Builder
+        </button>
+        <button
+          id="tab-run-history"
+          class="tab-button"
+          type="button"
+          data-tab-target="run-history"
+          aria-pressed="false"
+        >
+          Run History
+        </button>
+      </nav>
+
       <main>
-        <section class="metric-grid" aria-label="Artifact status summary">
+        <section class="metric-grid" data-tab-panel="dashboard" aria-label="Artifact status summary">
           <article class="metric">
             <span class="metric-label">Scenario Gate</span>
             <strong id="scenario-gate">--</strong>
@@ -59,15 +89,54 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
           </article>
         </section>
 
-        <section class="panel builder-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Scenario Builder</p>
-              <h2>Custom Carry & Go Scenario</h2>
+        <section class="visual-grid" data-tab-panel="dashboard" aria-label="Visual test result summary">
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Scenario Health</p>
+                <h2>Outcome Split</h2>
+              </div>
+              <span id="outcome-chip" class="status-pill neutral">--</span>
             </div>
-            <span id="scenario-library-chip" class="status-pill neutral">--</span>
+            <div id="outcome-visual" class="visual-body"></div>
           </div>
-          <form id="scenario-builder-form" class="builder-form">
+
+          <div class="panel visual-wide">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Run History</p>
+                <h2>Max P95 Trend</h2>
+              </div>
+              <span id="trend-chip" class="status-pill neutral">--</span>
+            </div>
+            <div id="history-trend-visual" class="visual-body"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Safety</p>
+                <h2>Violation Distribution</h2>
+              </div>
+              <span id="violation-visual-chip" class="status-pill neutral">--</span>
+            </div>
+            <div id="violation-visual" class="visual-body"></div>
+          </div>
+        </section>
+
+        <section class="panel builder-panel" data-tab-panel="scenario-builder">
+          <details class="builder-collapse" open>
+            <summary class="builder-summary">
+              <div>
+                <p class="eyebrow">Scenario Builder</p>
+                <h2>Create Custom Carry & Go Scenario</h2>
+              </div>
+              <div class="builder-summary-meta">
+                <span id="scenario-library-chip" class="status-pill neutral">--</span>
+                <span class="status-pill neutral">BUILD</span>
+              </div>
+            </summary>
+            <form id="scenario-builder-form" class="builder-form">
             <div class="builder-section-label">Common</div>
             <div class="form-grid compact-grid">
               <label class="field">
@@ -236,11 +305,12 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
               </button>
               <span id="builder-status" class="muted" aria-live="polite">No custom scenario saved</span>
             </div>
-          </form>
-          <div id="scenario-library-list" class="scenario-library"></div>
+            </form>
+            <div id="scenario-library-list" class="scenario-library"></div>
+          </details>
         </section>
 
-        <section class="content-grid">
+        <section class="content-grid" data-tab-panel="dashboard">
           <div class="panel panel-wide">
             <div class="panel-heading">
               <div>
@@ -294,30 +364,32 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
             <div id="violation-list" class="token-list"></div>
           </div>
 
-          <div class="panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Observability</p>
-                <h2>Event Flow</h2>
+          <div class="event-audit-grid">
+            <div class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Observability</p>
+                  <h2>Event Flow</h2>
+                </div>
+                <span id="event-chip" class="status-pill neutral">--</span>
               </div>
-              <span id="event-chip" class="status-pill neutral">--</span>
+              <div id="event-modules" class="module-grid"></div>
             </div>
-            <div id="event-modules" class="module-grid"></div>
-          </div>
 
-          <div class="panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Audit Trail</p>
-                <h2>Recent Records</h2>
+            <div class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Audit Trail</p>
+                  <h2>Recent Records</h2>
+                </div>
+                <span id="audit-chip" class="status-pill neutral">--</span>
               </div>
-              <span id="audit-chip" class="status-pill neutral">--</span>
+              <div id="audit-records" class="audit-list"></div>
             </div>
-            <div id="audit-records" class="audit-list"></div>
           </div>
         </section>
 
-        <section class="panel history-panel">
+        <section class="panel history-panel" data-tab-panel="run-history">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Run History</p>

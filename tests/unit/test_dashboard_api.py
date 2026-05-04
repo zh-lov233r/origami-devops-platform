@@ -39,8 +39,14 @@ def test_dashboard_page_file_is_served() -> None:
 
     assert dashboard_path.name == "dashboard.html"
     assert "Origami Artifact Dashboard" in dashboard_path.read_text()
+    assert 'data-tab-target="dashboard"' in dashboard_path.read_text()
+    assert 'data-tab-target="scenario-builder"' in dashboard_path.read_text()
+    assert 'data-tab-target="run-history"' in dashboard_path.read_text()
     assert "Scenario Builder" in dashboard_path.read_text()
     assert "Advanced Options" in dashboard_path.read_text()
+    assert "Outcome Split" in dashboard_path.read_text()
+    assert "Max P95 Trend" in dashboard_path.read_text()
+    assert "Violation Distribution" in dashboard_path.read_text()
 
 
 def test_dashboard_report_endpoints_return_artifact_payloads() -> None:
