@@ -43,3 +43,19 @@ observation
 4. Export GRPO and STUM placeholders to ONNX.
 5. Serve exported models through edge mock.
 6. Verify immutable audit chain after a run.
+
+## Quality Gate
+
+Run the local DevOps quality gate with:
+
+```bash
+make quality
+```
+
+It runs lint, unit/smoke tests, the Carry & Go scenario suite, latency benchmark, and audit verification. The scenario and benchmark commands write JSON reports to `artifacts/reports/`.
+
+For easier review, the scenario runner also writes:
+
+- `artifacts/reports/scenario_report.md`: compact Markdown table for humans
+- `artifacts/events/scenario_events.jsonl`: per-module observability events
+- `artifacts/audit/scenario_audit.jsonl`: persisted audit-chain records

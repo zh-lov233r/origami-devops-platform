@@ -1,0 +1,43 @@
+# 中文：CI 质量门，运行 lint、测试、场景回归、benchmark 和 audit verification。
+# English: CI quality gate running lint, tests, scenario regression, benchmark, and audit verification.
+
+name: quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run quality gate
+        run: make quality PYTHON=python
+
+      - name: Upload scenario and benchmark reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-reports
+          path: |
+            artifacts/reports/scenario_report.json
+            artifacts/reports/scenario_report.md
+            artifacts/reports/benchmark_report.json
+            artifacts/events/scenario_events.jsonl
+            artifacts/audit/scenario_audit.jsonl
+          if-no-files-found: warn

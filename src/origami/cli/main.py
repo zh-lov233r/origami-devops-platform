@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 from origami.audit.chain import AuditChain
-from origami.benchmark.runner import run_latency_benchmark
+from origami.benchmark.runner import DEFAULT_BENCHMARK_REPORT_PATH, run_latency_benchmark
 from origami.core.pipeline import PIC2Pipeline
 from origami.edge.mock_runtime import run_edge_mock
 from origami.evaluation.scenario_runner import DEFAULT_REPORT_PATH, run_scenario_suite
@@ -79,17 +79,50 @@ def main() -> None:
         default=str(DEFAULT_REPORT_PATH),
         help="Path for the scenario JSON report.",
     )
+    parser.add_argument(
+        "--artifact-root",
+        default="artifacts",
+        help="Root directory for persisted reports, event logs, and audit logs.",
+    )
+    parser.add_argument(
+        "--benchmark-report-path",
+        default=str(DEFAULT_BENCHMARK_REPORT_PATH),
+        help="Path for the benchmark JSON report.",
+    )
+    parser.add_argument(
+        "--benchmark-steps",
+        type=int,
+        default=20,
+        help="Number of benchmark pipeline steps to run.",
+    )
+    parser.add_argument(
+        "--max-module-p95-ms",
+        type=float,
+        default=50.0,
+        help="Benchmark quality gate threshold for per-module p95 latency.",
+    )
     args = parser.parse_args()
 
     if args.command == "smoke":
         run_smoke()
     elif args.command == "scenario":
-        report = run_scenario_suite(Path(args.scenario_dir), Path(args.report_path))
+        report = run_scenario_suite(
+            Path(args.scenario_dir),
+            Path(args.report_path),
+            artifact_root=Path(args.artifact_root),
+        )
         print(json.dumps(report, indent=2, sort_keys=True))
         if not report["quality_gate_passed"]:
             raise SystemExit(1)
     elif args.command == "benchmark":
-        print(json.dumps(run_latency_benchmark(), indent=2, sort_keys=True))
+        report = run_latency_benchmark(
+            steps=args.benchmark_steps,
+            report_path=Path(args.benchmark_report_path),
+            max_module_p95_ms=args.max_module_p95_ms,
+        )
+        print(json.dumps(report, indent=2, sort_keys=True))
+        if not report["quality_gate_passed"]:
+            raise SystemExit(1)
     elif args.command == "export":
         print(json.dumps(export_placeholder(), indent=2, sort_keys=True))
     elif args.command == "edge-mock":

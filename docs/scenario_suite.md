@@ -32,7 +32,12 @@ Run it locally with:
 .venv/bin/python -m origami.cli.main scenario
 ```
 
-The default report is written to `artifacts/reports/scenario_report.json`.
+The runner writes these default artifacts:
+
+- `artifacts/reports/scenario_report.json`: machine-readable full report
+- `artifacts/reports/scenario_report.md`: human-readable summary table
+- `artifacts/events/scenario_events.jsonl`: per-module latency events
+- `artifacts/audit/scenario_audit.jsonl`: tamper-evident audit chain entries
 
 Useful metrics to aggregate:
 

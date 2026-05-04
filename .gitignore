@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 artifacts/**/*.json
 artifacts/**/*.jsonl
+artifacts/**/*.md
 artifacts/**/*.onnx
 artifacts/**/*.pt
 artifacts/**/*.pth

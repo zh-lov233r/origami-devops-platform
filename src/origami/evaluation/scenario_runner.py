@@ -5,7 +5,6 @@ English: Carry & Go scenario runner that loads YAML cases, runs the pipeline, ch
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,15 +14,18 @@ from typing import Any
 import yaml
 
 from origami.core.pipeline import PIC2Pipeline, PipelineResult
+from origami.persistence.artifact_store import ArtifactStore
 
 
 DEFAULT_SCENARIO_DIR = Path("configs/scenarios")
 DEFAULT_REPORT_PATH = Path("artifacts/reports/scenario_report.json")
+DEFAULT_ARTIFACT_ROOT = Path("artifacts")
 
 
 def run_scenario_suite(
     scenario_dir: Path | str = DEFAULT_SCENARIO_DIR,
     report_path: Path | str | None = None,
+    artifact_root: Path | str | None = None,
 ) -> dict[str, Any]:
     """Run all scenario YAML files in a directory and optionally persist a JSON report."""
     scenario_path = Path(scenario_dir)
@@ -31,17 +33,22 @@ def run_scenario_suite(
     scenario_results = [_run_case(case) for case in cases]
     report = _build_report(scenario_results)
 
+    if artifact_root is not None:
+        _persist_suite_artifacts(ArtifactStore(artifact_root), report, scenario_results)
+
     if report_path is not None:
-        output_path = Path(report_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(report, indent=2, sort_keys=True))
+        ArtifactStore(".").write_json(report_path, report)
 
     return report
 
 
 def run_default_scenario_suite() -> dict[str, Any]:
     """Run the default Carry & Go scenario suite and write the standard report artifact."""
-    return run_scenario_suite(DEFAULT_SCENARIO_DIR, DEFAULT_REPORT_PATH)
+    return run_scenario_suite(
+        DEFAULT_SCENARIO_DIR,
+        DEFAULT_REPORT_PATH,
+        artifact_root=DEFAULT_ARTIFACT_ROOT,
+    )
 
 
 def _load_scenario(path: Path) -> dict[str, Any]:
@@ -68,6 +75,8 @@ def _run_case(case: dict[str, Any]) -> dict[str, Any]:
         "checks": checks,
         "actual": actual,
         "latency_ms": {event.module: event.latency_ms for event in result.events},
+        "event_records": _event_records(scenario_id, result),
+        "audit_records": _audit_records(scenario_id, pipeline),
     }
 
 
@@ -175,8 +184,123 @@ def _build_report(scenario_results: list[dict[str, Any]]) -> dict[str, Any]:
             "violation_counts": _count_list_actual(scenario_results, "violations"),
             "module_latency_ms": latencies,
         },
-        "scenarios": scenario_results,
+        "scenarios": [_report_scenario(result) for result in scenario_results],
     }
+
+
+def _persist_suite_artifacts(
+    store: ArtifactStore,
+    report: dict[str, Any],
+    scenario_results: list[dict[str, Any]],
+) -> dict[str, str]:
+    event_records = [
+        record
+        for scenario in scenario_results
+        for record in scenario["event_records"]
+    ]
+    audit_records = [
+        record
+        for scenario in scenario_results
+        for record in scenario["audit_records"]
+    ]
+
+    paths = {
+        "markdown_report": store.write_text(
+            "reports/scenario_report.md",
+            _markdown_report(report),
+        ),
+        "event_log": store.write_jsonl("events/scenario_events.jsonl", event_records),
+        "audit_log": store.write_jsonl("audit/scenario_audit.jsonl", audit_records),
+    }
+    report["artifacts"] = {name: str(path) for name, path in paths.items()}
+    store.write_json("reports/scenario_report.json", report)
+    return report["artifacts"]
+
+
+def _report_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in scenario.items()
+        if key not in {"event_records", "audit_records"}
+    }
+
+
+def _event_records(scenario_id: str, result: PipelineResult) -> list[dict[str, Any]]:
+    return [
+        {
+            "run_id": result.run_id,
+            "scenario_id": scenario_id,
+            "step": result.step,
+            **event.to_dict(),
+        }
+        for event in result.events
+    ]
+
+
+def _audit_records(scenario_id: str, pipeline: PIC2Pipeline) -> list[dict[str, Any]]:
+    return [
+        {
+            "scenario_id": scenario_id,
+            **entry.data,
+        }
+        for entry in pipeline.audit.entries
+    ]
+
+
+def _markdown_report(report: dict[str, Any]) -> str:
+    summary = report["summary"]
+    lines = [
+        "# Carry & Go Scenario Report",
+        "",
+        f"- Generated at: `{report['generated_at']}`",
+        f"- Quality gate: `{'PASS' if report['quality_gate_passed'] else 'FAIL'}`",
+        f"- Pass rate: `{report['passed']}/{report['total']} ({report['pass_rate']:.0%})`",
+        "",
+        "## Scenario Results",
+        "",
+        "| Scenario | Result | Final Move | STUM | Route | SEOM | Fleet | Violations |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for scenario in report["scenarios"]:
+        actual = scenario["actual"]
+        violations = ", ".join(actual.get("violations", [])) or "-"
+        result = "PASS" if scenario["passed"] else "FAIL"
+        lines.append(
+            "| "
+            f"`{scenario['id']}` | `{result}` | `{actual.get('final_move')}` | "
+            f"`{actual.get('stum_gate')}` | `{actual.get('route_strategy')}` | "
+            f"`{actual.get('seom_passed')}` | `{actual.get('fleet_adjustment')}` | "
+            f"{violations} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Latency Summary",
+            "",
+            "| Module | Avg ms | P50 ms | P95 ms | Max ms |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for module, metrics in summary["module_latency_ms"].items():
+        lines.append(
+            f"| `{module}` | {metrics['avg']} | {metrics['p50']} | "
+            f"{metrics['p95']} | {metrics['max']} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Counts",
+            "",
+            f"- Final moves: `{summary['final_move_counts']}`",
+            f"- STUM gates: `{summary['stum_gate_counts']}`",
+            f"- Fleet adjustments: `{summary['fleet_adjustment_counts']}`",
+            f"- Violations: `{summary['violation_counts']}`",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _latency_summary(scenario_results: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
