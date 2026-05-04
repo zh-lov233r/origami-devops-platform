@@ -18,10 +18,22 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
           <h1>Artifact Dashboard</h1>
         </div>
         <div class="topbar-actions">
+          <button id="run-scenario-button" class="action-button primary" type="button">
+            Run Scenario
+          </button>
+          <button id="run-benchmark-button" class="action-button" type="button">
+            Run Benchmark
+          </button>
+          <button id="refresh-button" class="action-button" type="button">
+            Refresh
+          </button>
           <span id="generated-at" class="muted">Loading artifacts</span>
           <span id="overall-gate" class="status-pill neutral">LOADING</span>
         </div>
       </header>
+      <div class="action-strip">
+        <span id="action-status" aria-live="polite">Ready</span>
+      </div>
 
       <main>
         <section class="metric-grid" aria-label="Artifact status summary">
@@ -45,6 +57,187 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
             <strong id="audit-event-count">--</strong>
             <small id="audit-event-path">--</small>
           </article>
+        </section>
+
+        <section class="panel builder-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Scenario Builder</p>
+              <h2>Custom Carry & Go Scenario</h2>
+            </div>
+            <span id="scenario-library-chip" class="status-pill neutral">--</span>
+          </div>
+          <form id="scenario-builder-form" class="builder-form">
+            <div class="builder-section-label">Common</div>
+            <div class="form-grid compact-grid">
+              <label class="field">
+                <span>ID</span>
+                <input id="builder-id" name="id" type="text" value="custom_carry_go" required />
+              </label>
+              <label class="field">
+                <span>Name</span>
+                <input id="builder-name" name="name" type="text" value="Custom Carry & Go" required />
+              </label>
+              <label class="field">
+                <span>Tags</span>
+                <input id="builder-tags" name="tags" type="text" value="custom,carry_go" />
+              </label>
+              <label class="field">
+                <span>Target X</span>
+                <input id="builder-target-x" name="target_x" type="number" value="1" step="1" />
+              </label>
+              <label class="field">
+                <span>Target Y</span>
+                <input id="builder-target-y" name="target_y" type="number" value="1" step="1" />
+              </label>
+              <label class="field">
+                <span>Payload kg</span>
+                <input id="builder-payload-kg" name="payload_kg" type="number" value="2" min="0" step="0.1" />
+              </label>
+              <label class="field">
+                <span>Battery %</span>
+                <input id="builder-battery-pct" name="battery_pct" type="number" value="80" min="0" max="100" step="1" />
+              </label>
+              <label class="field">
+                <span>Human Distance m</span>
+                <input
+                  id="builder-human-distance"
+                  name="nearest_human_distance_m"
+                  type="number"
+                  value="2"
+                  min="0"
+                  step="0.1"
+                />
+              </label>
+              <label class="field">
+                <span>Expected Move</span>
+                <select id="builder-final-move" name="final_move">
+                  <option value="east">east</option>
+                  <option value="hold">hold</option>
+                  <option value="return_to_dock">return_to_dock</option>
+                  <option value="enter_elevator">enter_elevator</option>
+                </select>
+              </label>
+            </div>
+            <div class="builder-toggles">
+              <label class="checkbox-field">
+                <input id="builder-payload-locked" name="payload_locked" type="checkbox" checked />
+                <span>Payload locked</span>
+              </label>
+              <label class="checkbox-field">
+                <input id="builder-seom-passed" name="seom_passed" type="checkbox" checked />
+                <span>SEOM expected pass</span>
+              </label>
+              <label class="checkbox-field">
+                <input id="builder-overwrite" name="overwrite" type="checkbox" />
+                <span>Overwrite existing</span>
+              </label>
+            </div>
+            <details id="advanced-scenario-builder" class="advanced-builder">
+              <summary>
+                <span>Advanced Options</span>
+                <small>AMDC drift, STUM uncertainty, privacy, fleet context, and expected checks</small>
+              </summary>
+              <div class="form-grid advanced-grid">
+                <label class="field field-wide">
+                  <span>Description</span>
+                  <input
+                    id="builder-description"
+                    name="description"
+                    type="text"
+                    value="Dashboard-generated Carry & Go scenario."
+                  />
+                </label>
+                <label class="field">
+                  <span>Position X</span>
+                  <input id="builder-position-x" name="position_x" type="number" value="0" step="1" />
+                </label>
+                <label class="field">
+                  <span>Position Y</span>
+                  <input id="builder-position-y" name="position_y" type="number" value="0" step="1" />
+                </label>
+                <label class="field">
+                  <span>State Age s</span>
+                  <input id="builder-state-age" name="state_age_s" type="number" value="0" min="0" step="0.1" />
+                </label>
+                <label class="field">
+                  <span>Floor mu</span>
+                  <input id="builder-floor-mu" name="floor_mu_observed" type="number" value="0.52" min="0" step="0.01" />
+                </label>
+                <label class="field">
+                  <span>Camera lux</span>
+                  <input id="builder-camera-lux" name="camera_lux_current" type="number" value="480" min="0" step="10" />
+                </label>
+                <label class="field">
+                  <span>IMU vibration</span>
+                  <input id="builder-imu-vibration" name="imu_vibration_rms" type="number" value="0.08" min="0" step="0.01" />
+                </label>
+                <label class="field">
+                  <span>Payload bias kg</span>
+                  <input id="builder-payload-bias" name="payload_scale_bias_kg" type="number" value="0" step="0.1" />
+                </label>
+                <label class="field">
+                  <span>Current Zone</span>
+                  <input id="builder-current-zone" name="current_zone" type="text" value="" />
+                </label>
+                <label class="field">
+                  <span>Privacy Zones</span>
+                  <input id="builder-privacy-zones" name="privacy_zones" type="text" value="" />
+                </label>
+                <label class="field">
+                  <span>Nearby Robots</span>
+                  <input id="builder-nearby-robots" name="nearby_robots" type="number" value="0" min="0" step="1" />
+                </label>
+                <label class="field">
+                  <span>Elevator Queue</span>
+                  <input id="builder-elevator-queue" name="elevator_queue" type="number" value="0" min="0" step="1" />
+                </label>
+                <label class="field">
+                  <span>Expected STUM</span>
+                  <select id="builder-stum-gate" name="stum_gate">
+                    <option value="">Any</option>
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Route Strategy</span>
+                  <select id="builder-route-strategy" name="route_strategy">
+                    <option value="">Any</option>
+                    <option value="normal">normal</option>
+                    <option value="safe_halt_or_return">safe_halt_or_return</option>
+                    <option value="alternate_route">alternate_route</option>
+                    <option value="elevator_wait">elevator_wait</option>
+                  </select>
+                </label>
+                <label class="field field-wide">
+                  <span>Expected Violations</span>
+                  <input id="builder-violations" name="expected_violations" type="text" value="" />
+                </label>
+              </div>
+              <div class="builder-toggles advanced-toggles">
+                <label class="checkbox-field">
+                  <input id="builder-sensor-blackout" name="sensor_blackout" type="checkbox" />
+                  <span>Sensor blackout</span>
+                </label>
+                <label class="checkbox-field">
+                  <input id="builder-corridor-occupied" name="corridor_occupied" type="checkbox" />
+                  <span>Corridor occupied</span>
+                </label>
+              </div>
+            </details>
+            <div class="builder-actions">
+              <button id="save-scenario-button" class="action-button primary" type="submit">
+                Save Scenario
+              </button>
+              <button id="save-run-scenario-button" class="action-button" type="button">
+                Save & Run
+              </button>
+              <span id="builder-status" class="muted" aria-live="polite">No custom scenario saved</span>
+            </div>
+          </form>
+          <div id="scenario-library-list" class="scenario-library"></div>
         </section>
 
         <section class="content-grid">
@@ -121,6 +314,36 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
               <span id="audit-chip" class="status-pill neutral">--</span>
             </div>
             <div id="audit-records" class="audit-list"></div>
+          </div>
+        </section>
+
+        <section class="panel history-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Run History</p>
+              <h2>Recent Dashboard Runs</h2>
+            </div>
+            <span id="history-chip" class="status-pill neutral">--</span>
+          </div>
+          <div class="table-wrap">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Run</th>
+                  <th>Type</th>
+                  <th>Gate</th>
+                  <th>Scope</th>
+                  <th>Max P95</th>
+                  <th>Violations</th>
+                  <th>Artifact</th>
+                </tr>
+              </thead>
+              <tbody id="history-table-body">
+                <tr>
+                  <td colspan="7" class="empty-cell">Loading</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
       </main>

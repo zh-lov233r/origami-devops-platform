@@ -8,22 +8,54 @@ const ENDPOINTS = {
   benchmark: "/api/reports/benchmark",
   events: "/api/events/scenario?limit=500",
   audit: "/api/audit/scenario?limit=100",
+  history: "/api/history/runs?limit=25",
+  scenarios: "/api/scenarios",
+  saveScenario: "/api/scenarios",
+  runScenario: "/runs/scenario",
+  runBenchmark: "/runs/benchmark",
 };
 
+const ACTION_BUTTON_IDS = [
+  "run-scenario-button",
+  "run-benchmark-button",
+  "refresh-button",
+  "save-scenario-button",
+  "save-run-scenario-button",
+];
+
 document.addEventListener("DOMContentLoaded", () => {
+  registerActionButtons();
+  registerScenarioBuilder();
   loadDashboard();
 });
 
 async function loadDashboard() {
   try {
-    const [scenarioPayload, benchmarkPayload, eventPayload, auditPayload] = await Promise.all([
-      fetchJson(ENDPOINTS.scenario),
-      fetchJson(ENDPOINTS.benchmark),
-      fetchJson(ENDPOINTS.events),
-      fetchJson(ENDPOINTS.audit),
-    ]);
+    const [
+      scenarioPayload,
+      benchmarkPayload,
+      eventPayload,
+      auditPayload,
+      historyPayload,
+      scenariosPayload,
+    ] =
+      await Promise.all([
+        fetchJson(ENDPOINTS.scenario),
+        fetchJson(ENDPOINTS.benchmark),
+        fetchJson(ENDPOINTS.events),
+        fetchJson(ENDPOINTS.audit),
+        fetchJson(ENDPOINTS.history),
+        fetchJson(ENDPOINTS.scenarios),
+      ]);
 
-    renderDashboard(scenarioPayload, benchmarkPayload, eventPayload, auditPayload);
+    renderDashboard(
+      scenarioPayload,
+      benchmarkPayload,
+      eventPayload,
+      auditPayload,
+      historyPayload,
+      scenariosPayload,
+    );
   } catch (error) {
     renderFatalError(error);
   }
@@ -37,16 +69,206 @@ async function fetchJson(url) {
   return response.json();
 }
 
-function renderDashboard(scenarioPayload, benchmarkPayload, eventPayload, auditPayload) {
+async function postJson(url, payload = null) {
+  const options = { method: "POST" };
+  if (payload !== null) {
+    options.headers = { "Content-Type": "application/json" };
+    options.body = JSON.stringify(payload);
+  }
+
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    throw new Error(await errorMessage(response, url));
+  }
+  return response.json();
+}
+
+async function errorMessage(response, url) {
+  try {
+    const payload = await response.json();
+    return payload.detail || `${url} returned ${response.status}`;
+  } catch {
+    return `${url} returned ${response.status}`;
+  }
+}
+
+function registerActionButtons() {
+  document.getElementById("run-scenario-button").addEventListener("click", () => {
+    runDashboardAction("Scenario run", ENDPOINTS.runScenario);
+  });
+  document.getElementById("run-benchmark-button").addEventListener("click", () => {
+    runDashboardAction("Benchmark run", ENDPOINTS.runBenchmark);
+  });
+  document.getElementById("refresh-button").addEventListener("click", () => {
+    refreshArtifacts();
+  });
+}
+
+function registerScenarioBuilder() {
+  document.getElementById("scenario-builder-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveScenarioFromBuilder(false);
+  });
+  document.getElementById("save-run-scenario-button").addEventListener("click", () => {
+    saveScenarioFromBuilder(true);
+  });
+}
+
+async function runDashboardAction(label, url) {
+  setActionBusy(true);
+  setActionStatus(`${label} running`, "info");
+
+  try {
+    await postJson(url);
+    await loadDashboard();
+    setActionStatus(`${label} complete at ${new Date().toLocaleTimeString()}`, "pass");
+  } catch (error) {
+    setActionStatus(`${label} failed: ${error.message}`, "fail");
+  } finally {
+    setActionBusy(false);
+  }
+}
+
+async function saveScenarioFromBuilder(runAfterSave) {
+  setActionBusy(true);
+  setBuilderStatus("Saving scenario", "info");
+
+  try {
+    const saved = await postJson(ENDPOINTS.saveScenario, buildScenarioPayload());
+    await loadDashboard();
+    setBuilderStatus(`Saved ${saved.scenario.id}`, "pass");
+
+    if (runAfterSave) {
+      setActionStatus("Scenario run running", "info");
+      await postJson(ENDPOINTS.runScenario);
+      await loadDashboard();
+      setActionStatus(`Scenario run complete at ${new Date().toLocaleTimeString()}`, "pass");
+    }
+  } catch (error) {
+    setBuilderStatus(error.message, "fail");
+  } finally {
+    setActionBusy(false);
+  }
+}
+
+function buildScenarioPayload() {
+  const observation = {
+    mission_type: "carry_go_delivery",
+    position: [numberValue("builder-position-x"), numberValue("builder-position-y")],
+    target: [numberValue("builder-target-x"), numberValue("builder-target-y")],
+    sensor_bias: 0.01,
+    payload_kg: numberValue("builder-payload-kg"),
+    payload_locked: checkedValue("builder-payload-locked"),
+    battery_pct: numberValue("builder-battery-pct"),
+    nearest_human_distance_m: numberValue("builder-human-distance"),
+    state_age_s: numberValue("builder-state-age"),
+    sensor_blackout: checkedValue("builder-sensor-blackout"),
+    floor_mu_observed: numberValue("builder-floor-mu"),
+    camera_lux_reference: 500,
+    camera_lux_current: numberValue("builder-camera-lux"),
+    camera_sharpness: 0.96,
+    imu_vibration_rms: numberValue("builder-imu-vibration"),
+    payload_scale_reading_kg:
+      numberValue("builder-payload-kg") + numberValue("builder-payload-bias"),
+    payload_reference_kg: numberValue("builder-payload-kg"),
+    fleet_context: {
+      nearby_robots: numberValue("builder-nearby-robots"),
+      corridor_occupied: checkedValue("builder-corridor-occupied"),
+      elevator_queue: numberValue("builder-elevator-queue"),
+    },
+  };
+
+  const currentZone = textValue("builder-current-zone");
+  const privacyZones = listValue("builder-privacy-zones");
+  if (currentZone) {
+    observation.current_zone = currentZone;
+  }
+  if (privacyZones.length) {
+    observation.privacy_zones = privacyZones;
+  }
+
+  const expected = {
+    final_move: textValue("builder-final-move"),
+    seom_passed: checkedValue("builder-seom-passed"),
+    audit_valid: true,
+  };
+  const stumGate = textValue("builder-stum-gate");
+  const routeStrategy = textValue("builder-route-strategy");
+  const violations = listValue("builder-violations");
+  if (stumGate) {
+    expected.stum_gate = stumGate;
+  }
+  if (routeStrategy) {
+    expected.route_strategy = routeStrategy;
+  }
+  if (violations.length) {
+    expected.expected_violations = violations;
+  } else {
+    expected.required_absent_violations = ["C01_person_stop_300mm", "C07_battery_return_15pct"];
+  }
+
+  return {
+    id: textValue("builder-id"),
+    name: textValue("builder-name"),
+    description: textValue("builder-description"),
+    tags: listValue("builder-tags"),
+    observation,
+    expected,
+    overwrite: checkedValue("builder-overwrite"),
+  };
+}
+
+async function refreshArtifacts() {
+  setActionBusy(true);
+  setActionStatus("Refreshing artifacts", "info");
+
+  try {
+    await loadDashboard();
+    setActionStatus(`Artifacts refreshed at ${new Date().toLocaleTimeString()}`, "pass");
+  } catch (error) {
+    setActionStatus(`Refresh failed: ${error.message}`, "fail");
+  } finally {
+    setActionBusy(false);
+  }
+}
+
+function setActionBusy(isBusy) {
+  ACTION_BUTTON_IDS.forEach((id) => {
+    document.getElementById(id).disabled = isBusy;
+  });
+}
+
+function setActionStatus(message, kind) {
+  const node = document.getElementById("action-status");
+  node.textContent = message;
+  node.className = kind || "";
+}
+
+function setBuilderStatus(message, kind) {
+  const node = document.getElementById("builder-status");
+  node.textContent = message;
+  node.className = kind || "";
+}
+
+function renderDashboard(
+  scenarioPayload,
+  benchmarkPayload,
+  eventPayload,
+  auditPayload,
+  historyPayload,
+  scenariosPayload,
+) {
   const scenarioReport = scenarioPayload.available ? scenarioPayload.data : null;
   const benchmarkReport = benchmarkPayload.available ? benchmarkPayload.data : null;
 
   renderSummary(scenarioPayload, benchmarkPayload, eventPayload, auditPayload);
+  renderScenarioLibrary(scenariosPayload);
   renderScenarioTable(scenarioReport);
   renderLatency(benchmarkReport, scenarioReport);
   renderViolations(scenarioReport);
   renderEvents(eventPayload);
   renderAudit(auditPayload);
+  renderHistory(historyPayload);
 }
 
 function renderSummary(scenarioPayload, benchmarkPayload, eventPayload, auditPayload) {
@@ -126,6 +348,22 @@ function renderScenarioTable(report) {
         </tr>
       `;
     })
+    .join("");
+}
+
+function renderScenarioLibrary(payload) {
+  const scenarios = payload?.scenarios || [];
+  const container = document.getElementById("scenario-library-list");
+  setPill("scenario-library-chip", `${payload?.count || 0} YAML`, payload?.available ? "info" : "warn");
+
+  if (!scenarios.length) {
+    container.innerHTML = `<span class="token">No scenario YAML files</span>`;
+    return;
+  }
+
+  container.innerHTML = scenarios
+    .slice(-12)
+    .map((scenario) => `<span class="token info">${escapeHtml(scenario.id)}</span>`)
     .join("");
 }
 
@@ -237,11 +475,47 @@ function renderAudit(auditPayload) {
     .join("");
 }
 
+function renderHistory(historyPayload) {
+  const records = historyPayload.records || [];
+  const tableBody = document.getElementById("history-table-body");
+
+  setPill("history-chip", `${historyPayload.count || 0} RUNS`, historyPayload.available ? "info" : "warn");
+
+  if (!records.length) {
+    tableBody.innerHTML = `<tr><td colspan="7" class="empty-cell">No dashboard-triggered runs yet</td></tr>`;
+    return;
+  }
+
+  tableBody.innerHTML = records
+    .map((record) => {
+      const resultKind = record.quality_gate_passed ? "pass" : "fail";
+      return `
+        <tr>
+          <td>
+            <div class="history-run">
+              <strong>${formatTimestamp(record.generated_at || record.recorded_at)}</strong>
+              <span>${escapeHtml(record.id)}</span>
+            </div>
+          </td>
+          <td>${escapeHtml(record.type || "--")}</td>
+          <td><span class="status-pill ${resultKind}">${record.quality_gate_passed ? "PASS" : "FAIL"}</span></td>
+          <td>${escapeHtml(historyScope(record))}</td>
+          <td>${formatNumber(record.max_module_p95_ms)} ms</td>
+          <td>${historyViolationCell(record)}</td>
+          <td><span class="tag">${escapeHtml(shortPath(record.artifact_path))}</span></td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
 function renderFatalError(error) {
   setPill("overall-gate", "ERROR", "fail");
   setText("generated-at", error.message);
   document.getElementById("scenario-table-body").innerHTML =
     `<tr><td colspan="8" class="empty-cell">Dashboard API error</td></tr>`;
+  document.getElementById("history-table-body").innerHTML =
+    `<tr><td colspan="7" class="empty-cell">Dashboard API error</td></tr>`;
 }
 
 function renderTags(tags) {
@@ -258,6 +532,26 @@ function renderViolationTokens(violations) {
     return `<span class="token good">clear</span>`;
   }
   return violations.map((violation) => `<span class="token danger">${escapeHtml(violation)}</span>`).join(" ");
+}
+
+function historyScope(record) {
+  if (record.type === "scenario") {
+    return `${record.passed}/${record.total} scenarios`;
+  }
+  if (record.type === "benchmark") {
+    return `${record.steps || 0} benchmark steps`;
+  }
+  return "--";
+}
+
+function historyViolationCell(record) {
+  if (record.type !== "scenario") {
+    return `<span class="token info">n/a</span>`;
+  }
+  if (!record.violation_total) {
+    return `<span class="token good">clear</span>`;
+  }
+  return `<span class="token danger">${record.violation_total} total</span>`;
 }
 
 function countBy(records, key) {
@@ -292,6 +586,26 @@ function latencyKind(value, threshold) {
     return "warn";
   }
   return "";
+}
+
+function textValue(id) {
+  return document.getElementById(id).value.trim();
+}
+
+function numberValue(id) {
+  const value = Number(document.getElementById(id).value);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function checkedValue(id) {
+  return document.getElementById(id).checked;
+}
+
+function listValue(id) {
+  return textValue(id)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function setPill(id, text, kind) {
@@ -342,6 +656,14 @@ function shortHash(value) {
     return "--";
   }
   return `${value.slice(0, 12)}...${value.slice(-8)}`;
+}
+
+function shortPath(value) {
+  if (!value) {
+    return "--";
+  }
+  const parts = String(value).split("/");
+  return parts.slice(-3).join("/");
 }
 
 function escapeHtml(value) {

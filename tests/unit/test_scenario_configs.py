@@ -26,7 +26,7 @@ def test_carry_go_scenario_configs_have_basic_schema() -> None:
     scenario_paths = sorted(SCENARIO_DIR.glob("*.yaml"))
     scenarios = [_load_yaml(path) for path in scenario_paths]
 
-    assert {scenario["id"] for scenario in scenarios} == EXPECTED_IDS
+    assert EXPECTED_IDS <= {scenario["id"] for scenario in scenarios}
     for scenario in scenarios:
         assert scenario["version"] == 1
         assert isinstance(scenario["name"], str)

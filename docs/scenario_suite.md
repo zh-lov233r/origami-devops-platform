@@ -39,6 +39,14 @@ The runner writes these default artifacts:
 - `artifacts/events/scenario_events.jsonl`: per-module latency events
 - `artifacts/audit/scenario_audit.jsonl`: tamper-evident audit chain entries
 
+## Scenario Builder
+
+The dashboard can save custom Carry & Go YAML scenarios into `configs/scenarios/` through `POST /api/scenarios`. The builder writes the same schema as the hand-authored scenarios:
+
+- `observation`: runtime inputs for the six-stage pipeline
+- `expected`: assertions evaluated by the scenario runner
+- `tags`: dashboard/report grouping labels
+
 Useful metrics to aggregate:
 
 - final action correctness

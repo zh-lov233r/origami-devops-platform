@@ -70,7 +70,7 @@ make quality
 make dashboard
 ```
 
-Open `http://127.0.0.1:8000/dashboard`.
+Open `http://127.0.0.1:8000/dashboard`. The page can save custom scenario YAML, trigger a new scenario run, trigger a new benchmark run, or refresh the current artifact view. Runs triggered through the dashboard are appended to `artifacts/history/runs.jsonl`, with full snapshots under `artifacts/history/scenario/` and `artifacts/history/benchmark/`.
 
 The dashboard reads:
 
@@ -78,3 +78,8 @@ The dashboard reads:
 - `GET /api/reports/benchmark`
 - `GET /api/events/scenario`
 - `GET /api/audit/scenario`
+- `GET /api/history/runs`
+- `GET /api/scenarios`
+- `POST /api/scenarios`
+- `POST /runs/scenario`
+- `POST /runs/benchmark`

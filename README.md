@@ -29,7 +29,7 @@ make quality
 make dashboard
 ```
 
-Open `http://127.0.0.1:8000/dashboard`.
+Open `http://127.0.0.1:8000/dashboard`. The dashboard can build custom scenarios, refresh artifacts, trigger scenario or benchmark runs, and show run history from the page.
 
 ## Target Workflow
 

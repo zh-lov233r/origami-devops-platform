@@ -5,14 +5,32 @@ English: Unit tests for the scenario runner ensuring the Carry & Go suite produc
 
 import json
 from pathlib import Path
+from shutil import copyfile
 
 from origami.evaluation.scenario_runner import run_scenario_suite
 
 
+BUILT_IN_SCENARIOS = [
+    "corridor_conflict.yaml",
+    "elevator_queue.yaml",
+    "human_too_close.yaml",
+    "low_battery_return.yaml",
+    "normal_delivery.yaml",
+    "payload_overweight.yaml",
+    "privacy_zone.yaml",
+    "sensor_blackout.yaml",
+]
+
+
 def test_scenario_runner_executes_all_carry_go_cases(tmp_path: Path) -> None:
+    scenario_dir = tmp_path / "scenarios"
+    scenario_dir.mkdir()
+    for filename in BUILT_IN_SCENARIOS:
+        copyfile(Path("configs/scenarios") / filename, scenario_dir / filename)
+
     report_path = tmp_path / "scenario_report.json"
 
-    report = run_scenario_suite("configs/scenarios", report_path, artifact_root=tmp_path)
+    report = run_scenario_suite(scenario_dir, report_path, artifact_root=tmp_path)
 
     assert report["suite"] == "carry_go"
     assert report["total"] == 8

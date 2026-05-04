@@ -10,18 +10,25 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from origami.benchmark.runner import DEFAULT_BENCHMARK_REPORT_PATH, run_latency_benchmark
+from origami.benchmark.runner import (
+    DEFAULT_BENCHMARK_REPORT_PATH,
+    run_default_latency_benchmark,
+    run_latency_benchmark,
+)
 from origami.core.pipeline import PIC2Pipeline
-from origami.evaluation.scenario_runner import DEFAULT_REPORT_PATH
+from origami.evaluation.scenario_builder import list_scenarios, save_scenario
+from origami.evaluation.scenario_runner import DEFAULT_REPORT_PATH, run_default_scenario_suite
+from origami.persistence.run_history import RunHistoryStore
 
 app = FastAPI(title="Origami Mini PIC 2.0 DevOps Platform")
 
 ARTIFACT_ROOT = Path("artifacts")
 DASHBOARD_STATIC_DIR = Path(__file__).resolve().parents[1] / "dashboard" / "static"
+RUN_HISTORY = RunHistoryStore(ARTIFACT_ROOT)
 
 app.mount(
     "/dashboard/static",
@@ -65,11 +72,43 @@ def scenario_audit(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
     return _read_jsonl_artifact(ARTIFACT_ROOT / "audit" / "scenario_audit.jsonl", limit)
 
 
+@app.get("/api/history/runs")
+def run_history(limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
+    return RUN_HISTORY.list(limit)
+
+
+@app.get("/api/scenarios")
+def scenario_configs() -> dict[str, Any]:
+    return list_scenarios()
+
+
+@app.post("/api/scenarios")
+def scenario_create(payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return save_scenario(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/runs/smoke")
 def smoke_run() -> dict[str, object]:
     pipeline = PIC2Pipeline(run_id="api-smoke")
     result = pipeline.step({"position": [0, 0], "target": [1, 1], "sensor_bias": 0.0})
     return result.to_dict()
+
+
+@app.post("/runs/scenario")
+def scenario_run() -> dict[str, Any]:
+    report = run_default_scenario_suite()
+    report["history_record"] = RUN_HISTORY.record("scenario", report)
+    return report
+
+
+@app.post("/runs/benchmark")
+def benchmark_run() -> dict[str, object]:
+    report = run_default_latency_benchmark()
+    report["history_record"] = RUN_HISTORY.record("benchmark", report)
+    return report
 
 
 @app.post("/benchmarks/latency")
