@@ -1,0 +1,43 @@
+# 中文：传感器过期重规划场景，验证 STUM freshness 分支会触发重规划。
+# English: Stale sensor replan scenario verifying STUM freshness uncertainty triggers replanning.
+
+version: 1
+id: stale_sensor_replan
+name: Stale Sensor Replan
+description: A camera stream is far beyond its freshness window and should halt for replanning.
+tags:
+  - stum
+  - freshness
+  - replan
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  sensor_age_s:
+    camera: 12.0
+  sensor_max_age_s:
+    camera: 2.0
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: false
+  audit_valid: true
+  stum_gate: HIGH
+  autonomy_mode: HALT_OR_ESCALATE
+  route_strategy: alternate_route
+  expected_replan_reasons: [high_uncertainty, stum_requested_replan]
+  expected_recovery_actions: [mark_blocked_path, sample_alternate_route, publish_updated_plan]
+  expected_violations: [R1_uncertainty_halt]
+  expected_life_safety_violations: [R1_uncertainty_halt]
+  gradient_mask: zero
+  requires_human_review: true
+  notes: Stale sensor freshness should stop autonomy and request replanning before movement.

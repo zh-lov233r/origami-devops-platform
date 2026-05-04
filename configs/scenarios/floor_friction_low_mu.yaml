@@ -1,0 +1,34 @@
+# 中文：低摩擦地面场景，验证 AMDC 地面摩擦校准不会产生误停。
+# English: Low floor-friction scenario verifying AMDC friction calibration avoids false hold.
+
+version: 1
+id: floor_friction_low_mu
+name: Floor Friction Low Mu
+description: Robot enters a low-friction surface that should reduce speed preference while staying safe.
+tags:
+  - amdc
+  - floor
+  - calibration
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  floor_mu_observed: 0.20
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: east
+  seom_passed: true
+  audit_valid: true
+  stum_gate: LOW
+  route_strategy: normal
+  gradient_mask: pass
+  required_absent_violations: [C02_speed_limit, C08_route_safe]
+  notes: Low friction should be calibrated as a motion preference, not an immediate safety violation.

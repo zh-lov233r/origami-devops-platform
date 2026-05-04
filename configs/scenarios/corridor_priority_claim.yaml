@@ -1,0 +1,39 @@
+# 中文：高优先级走廊声明场景，验证 CRL-MRS 不总是让路。
+# English: High-priority corridor claim scenario verifying CRL-MRS does not always yield.
+
+version: 1
+id: corridor_priority_claim
+name: Corridor Priority Claim
+description: Robot has higher task priority than a corridor peer and should claim the shared resource.
+tags:
+  - fleet
+  - corridor
+  - priority
+
+observation:
+  mission_type: carry_go_delivery
+  robot_id: robot-priority
+  position: [0, 0]
+  target: [5, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  task_priority: 5.0
+  deadline_slack_s: 30.0
+  fleet_context:
+    nearby_robots: 1
+    corridor_occupied: true
+    corridor_occupied_by: robot-low-priority
+    corridor_peer_priority: 2.0
+
+expected:
+  final_move: east
+  seom_passed: true
+  audit_valid: true
+  expected_fleet_adjustment: claim_corridor_priority
+  expected_resource: corridor
+  reservation_status: requested
+  route_strategy: normal
+  notes: Higher task priority should allow the robot to claim corridor access instead of yielding.

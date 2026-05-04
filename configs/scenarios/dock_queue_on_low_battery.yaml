@@ -1,0 +1,39 @@
+# 中文：低电量但回桩排队场景，验证 CRL-MRS 会等待 dock slot。
+# English: Low-battery dock queue scenario verifying CRL-MRS waits for a dock slot.
+
+version: 1
+id: dock_queue_on_low_battery
+name: Dock Queue On Low Battery
+description: Robot needs to return to dock, but the dock resource is queued by another robot.
+tags:
+  - energy
+  - dock
+  - crl_mrs
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [3, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 10.0
+  nearest_human_distance_m: 2.0
+  fleet_context:
+    nearby_robots: 1
+    dock_queue: true
+
+expected:
+  final_move: hold
+  final_speed_mps: 0.0
+  seom_passed: true
+  audit_valid: true
+  route_strategy: safe_halt_or_return
+  expected_replan_reasons: [battery_abort]
+  expected_recovery_actions: [return_to_dock, notify_operator]
+  expected_grpo_risk_flags: [low_battery]
+  expected_fleet_adjustment: wait_for_dock_slot
+  expected_conflict_events: [dock_queue]
+  expected_resource: dock
+  reservation_status: deferred
+  notes: Low battery should request dock access, then hold when the dock queue is occupied.

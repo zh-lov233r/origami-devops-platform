@@ -1,0 +1,34 @@
+# 中文：门禁保持已确认场景，验证 SEOM 不会过度拦截合法过门。
+# English: Door-crossing positive scenario verifying SEOM does not block confirmed access.
+
+version: 1
+id: door_crossing_with_hold_confirmed
+name: Door Crossing With Hold Confirmed
+description: Robot crosses a controlled doorway after the required hold confirmation is present.
+tags:
+  - access
+  - door
+  - positive
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  door_crossing: true
+  door_hold_confirmed: true
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: east
+  seom_passed: true
+  audit_valid: true
+  route_strategy: normal
+  gradient_mask: pass
+  required_absent_violations: [C04_door_hold_30s]
+  notes: Confirmed door hold should allow safe route progress.

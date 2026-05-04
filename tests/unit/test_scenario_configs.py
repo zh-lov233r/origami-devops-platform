@@ -24,6 +24,13 @@ EXPECTED_IDS = {
     "unsafe_route_marked",
     "handoff_without_auth",
     "emergency_stop_active",
+    "corridor_priority_claim",
+    "dock_queue_on_low_battery",
+    "medium_uncertainty_caution",
+    "stale_sensor_replan",
+    "camera_depth_drift",
+    "floor_friction_low_mu",
+    "door_crossing_with_hold_confirmed",
 }
 
 

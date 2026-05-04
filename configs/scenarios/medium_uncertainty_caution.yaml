@@ -1,0 +1,35 @@
+# 中文：中等不确定性场景，验证 STUM CAUTION 档不会直接触发停机。
+# English: Medium uncertainty scenario verifying STUM CAUTION does not directly halt autonomy.
+
+version: 1
+id: medium_uncertainty_caution
+name: Medium Uncertainty Caution
+description: Model disagreement is elevated enough for caution but below the halt threshold.
+tags:
+  - stum
+  - uncertainty
+  - caution
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  model_disagreement: 0.12
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: east
+  seom_passed: true
+  audit_valid: true
+  stum_gate: MEDIUM
+  autonomy_mode: CAUTION
+  route_strategy: normal
+  gradient_mask: pass
+  required_absent_violations: [R1_uncertainty_halt, C12_emergency_stop]
+  notes: Medium uncertainty should surface CAUTION while preserving safe motion.

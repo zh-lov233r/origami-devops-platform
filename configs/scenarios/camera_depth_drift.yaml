@@ -1,0 +1,40 @@
+# 中文：相机/深度轻度漂移场景，验证 AMDC 漂移会进入 STUM caution 但不误停。
+# English: Mild camera/depth drift scenario verifying AMDC drift reaches STUM caution without false halt.
+
+version: 1
+id: camera_depth_drift
+name: Camera Depth Drift
+description: Camera exposure and depth drift increase perception uncertainty while the route remains safe.
+tags:
+  - amdc
+  - camera
+  - stum
+
+observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [1, 0]
+  sensor_bias: 0.01
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  camera_lux_reference: 500.0
+  camera_lux_current: 350.0
+  camera_flicker_hz: 100.0
+  camera_sharpness: 0.85
+  depth_reading_m: 2.20
+  depth_reference_m: 2.00
+  fleet_context:
+    nearby_robots: 0
+
+expected:
+  final_move: east
+  seom_passed: true
+  audit_valid: true
+  stum_gate: MEDIUM
+  autonomy_mode: CAUTION
+  route_strategy: normal
+  gradient_mask: pass
+  required_absent_violations: [R1_uncertainty_halt, C08_route_safe]
+  notes: Mild camera/depth drift should raise caution without triggering safety hold.
