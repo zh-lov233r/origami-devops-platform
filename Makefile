@@ -1,13 +1,16 @@
-# 中文：常用开发命令入口，封装 smoke、test、benchmark、export、edge mock 和 audit verify。
-# English: Common developer command entrypoint wrapping smoke, test, benchmark, export, edge mock, and audit verification.
+# 中文：常用开发命令入口，封装 smoke、scenario、test、benchmark、export、edge mock 和 audit verify。
+# English: Common developer command entrypoint wrapping smoke, scenario, test, benchmark, export, edge mock, and audit verification.
 
 PYTHONPATH := src
 PYTHON := python3
 
-.PHONY: smoke test benchmark export edge-mock audit-verify
+.PHONY: smoke scenario test benchmark export edge-mock audit-verify
 
 smoke:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m origami.cli.main smoke
+
+scenario:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m origami.cli.main scenario
 
 test:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m pytest

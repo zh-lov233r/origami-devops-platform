@@ -26,6 +26,14 @@ The scenario files in `configs/scenarios/` are single-step end-to-end cases for 
 
 A scenario runner should load these YAML files, run `PIC2Pipeline(run_id=scenario_id).step(observation)`, and compare `expected` against the returned `PipelineResult`.
 
+Run it locally with:
+
+```bash
+.venv/bin/python -m origami.cli.main scenario
+```
+
+The default report is written to `artifacts/reports/scenario_report.json`.
+
 Useful metrics to aggregate:
 
 - final action correctness
