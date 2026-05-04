@@ -5,6 +5,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.uv-cache/
 .venv/
 artifacts/**/*.json
 artifacts/**/*.jsonl
