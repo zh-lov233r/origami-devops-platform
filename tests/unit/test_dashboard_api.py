@@ -12,10 +12,14 @@ from origami.api.app import (
     dashboard,
     run_history,
     run_history_detail,
+    scenario_create,
+    scenario_delete,
+    scenario_detail,
     scenario_configs,
     scenario_audit,
     scenario_events,
     scenario_run,
+    scenario_update,
     scenario_report,
 )
 
@@ -31,6 +35,7 @@ def test_dashboard_routes_are_registered() -> None:
     assert "/api/history/runs" in route_paths
     assert "/api/history/runs/{record_id}" in route_paths
     assert "/api/scenarios" in route_paths
+    assert "/api/scenarios/{scenario_id}" in route_paths
     assert "/runs/scenario" in route_paths
     assert "/runs/benchmark" in route_paths
 
@@ -44,7 +49,7 @@ def test_dashboard_page_file_is_served() -> None:
     assert 'data-tab-target="dashboard"' in dashboard_path.read_text()
     assert 'data-tab-target="scenario-builder"' in dashboard_path.read_text()
     assert 'data-tab-target="run-history"' in dashboard_path.read_text()
-    assert "Scenario Builder" in dashboard_path.read_text()
+    assert "Scenario Manager" in dashboard_path.read_text()
     assert "Advanced Options" in dashboard_path.read_text()
     assert "Outcome Split" in dashboard_path.read_text()
     assert "Max P95 Trend" in dashboard_path.read_text()
@@ -110,3 +115,36 @@ def test_dashboard_scenario_config_endpoint_lists_yaml() -> None:
     assert payload["available"] is True
     assert payload["count"] == expected_scenario_count
     assert "normal_delivery" in {scenario["id"] for scenario in payload["scenarios"]}
+
+
+def test_dashboard_scenario_manager_endpoints_update_and_delete() -> None:
+    scenario_path = Path("configs/scenarios/dashboard_manager_tmp.yaml")
+    scenario_path.unlink(missing_ok=True)
+
+    created = scenario_create(
+        {
+            "id": "dashboard_manager_tmp",
+            "name": "Dashboard Manager Tmp",
+            "tags": ["custom", "dashboard"],
+            "observation": {"position": [0, 0], "target": [1, 1]},
+            "expected": {"final_move": "east"},
+        }
+    )
+
+    detail = scenario_detail(created["scenario"]["id"])
+    updated = scenario_update(
+        created["scenario"]["id"],
+        {
+            "id": "dashboard_manager_tmp",
+            "name": "Dashboard Manager Edited",
+            "tags": ["custom", "edited"],
+            "observation": {"position": [0, 0], "target": [2, 2]},
+            "expected": {"final_move": "hold", "seom_passed": False},
+        },
+    )
+    deleted = scenario_delete(created["scenario"]["id"])
+
+    assert detail["scenario"]["id"] == "dashboard_manager_tmp"
+    assert updated["updated"] is True
+    assert updated["scenario"]["name"] == "Dashboard Manager Edited"
+    assert deleted["deleted"] is True

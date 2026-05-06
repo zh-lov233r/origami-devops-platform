@@ -8,7 +8,7 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Origami Artifact Dashboard</title>
-    <link rel="stylesheet" href="/dashboard/static/dashboard.css?v=run-history-detail-v3" />
+    <link rel="stylesheet" href="/dashboard/static/dashboard.css?v=scenario-manager-v2" />
   </head>
   <body>
     <div class="app-shell">
@@ -52,7 +52,7 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
           data-tab-target="scenario-builder"
           aria-pressed="false"
         >
-          Scenario Builder
+          Scenario Manager
         </button>
         <button
           id="tab-run-history"
@@ -128,14 +128,29 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
           <details class="builder-collapse" open>
             <summary class="builder-summary">
               <div>
-                <p class="eyebrow">Scenario Builder</p>
-                <h2>Create Custom Carry & Go Scenario</h2>
+                <p class="eyebrow">Scenario Manager</p>
+                <h2>Create, Edit, and Delete Scenarios</h2>
               </div>
               <div class="builder-summary-meta">
                 <span id="scenario-library-chip" class="status-pill neutral">--</span>
-                <span class="status-pill neutral">BUILD</span>
+                <span id="scenario-manager-mode-chip" class="status-pill neutral">CREATE</span>
               </div>
             </summary>
+            <div class="manager-toolbar">
+              <div>
+                <p class="eyebrow">Scenario Library</p>
+                <h2 id="scenario-manager-title">New Scenario</h2>
+              </div>
+              <div class="manager-toolbar-actions">
+                <button id="new-scenario-button" class="action-button" type="button">
+                  New Scenario
+                </button>
+                <button id="delete-scenario-button" class="action-button danger" type="button" disabled>
+                  Delete Scenario
+                </button>
+              </div>
+            </div>
+            <div id="scenario-library-list" class="scenario-library"></div>
             <form id="scenario-builder-form" class="builder-form">
             <div class="builder-section-label">Common</div>
             <div class="form-grid compact-grid">
@@ -196,10 +211,6 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
               <label class="checkbox-field">
                 <input id="builder-seom-passed" name="seom_passed" type="checkbox" checked />
                 <span>SEOM expected pass</span>
-              </label>
-              <label class="checkbox-field">
-                <input id="builder-overwrite" name="overwrite" type="checkbox" />
-                <span>Overwrite existing</span>
               </label>
             </div>
             <details id="advanced-scenario-builder" class="advanced-builder">
@@ -303,10 +314,9 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
               <button id="save-run-scenario-button" class="action-button" type="button">
                 Save & Run
               </button>
-              <span id="builder-status" class="muted" aria-live="polite">No custom scenario saved</span>
+              <span id="builder-status" class="muted" aria-live="polite">Create a new scenario or select one to edit</span>
             </div>
             </form>
-            <div id="scenario-library-list" class="scenario-library"></div>
           </details>
         </section>
 
@@ -421,6 +431,6 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
       </main>
     </div>
 
-    <script src="/dashboard/static/dashboard.js?v=run-history-detail-v3"></script>
+    <script src="/dashboard/static/dashboard.js?v=scenario-manager-v2"></script>
   </body>
 </html>

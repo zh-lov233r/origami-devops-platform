@@ -1,6 +1,6 @@
 """
-中文：Scenario Builder 单元测试，验证自定义场景 YAML 可以被安全保存与列出。
-English: Unit tests for Scenario Builder ensuring custom scenario YAML can be safely saved and listed.
+中文：Scenario Manager 单元测试，验证自定义场景 YAML 可以被安全保存、读取、更新与删除。
+English: Unit tests for Scenario Manager ensuring custom scenario YAML can be saved, read, updated, and deleted.
 """
 
 from pathlib import Path
@@ -8,7 +8,13 @@ from pathlib import Path
 import pytest
 import yaml
 
-from origami.evaluation.scenario_builder import list_scenarios, save_scenario
+from origami.evaluation.scenario_builder import (
+    delete_scenario,
+    get_scenario,
+    list_scenarios,
+    save_scenario,
+    update_scenario,
+)
 
 
 def test_scenario_builder_saves_and_lists_custom_yaml(tmp_path: Path) -> None:
@@ -47,6 +53,11 @@ def test_scenario_builder_saves_and_lists_custom_yaml(tmp_path: Path) -> None:
     assert listed["count"] == 1
     assert listed["scenarios"][0]["id"] == "custom_human_stop"
 
+    detail = get_scenario("custom_human_stop", scenario_dir=tmp_path)
+
+    assert detail["available"] is True
+    assert detail["scenario"]["name"] == "Custom Human Stop"
+
 
 def test_scenario_builder_requires_overwrite_for_existing_yaml(tmp_path: Path) -> None:
     payload = {
@@ -64,3 +75,42 @@ def test_scenario_builder_requires_overwrite_for_existing_yaml(tmp_path: Path) -
     overwritten = save_scenario({**payload, "overwrite": True}, scenario_dir=tmp_path)
 
     assert overwritten["saved"] is True
+
+
+def test_scenario_manager_updates_renames_and_deletes_yaml(tmp_path: Path) -> None:
+    save_scenario(
+        {
+            "id": "custom_case",
+            "name": "Custom Case",
+            "observation": {"position": [0, 0], "target": [1, 1]},
+            "expected": {"final_move": "east"},
+        },
+        scenario_dir=tmp_path,
+    )
+
+    updated = update_scenario(
+        "custom_case",
+        {
+            "id": "renamed_case",
+            "name": "Renamed Case",
+            "tags": ["custom", "edited"],
+            "observation": {"position": [0, 0], "target": [2, 2]},
+            "expected": {"final_move": "hold", "seom_passed": False},
+        },
+        scenario_dir=tmp_path,
+    )
+
+    assert updated["updated"] is True
+    assert updated["previous_id"] == "custom_case"
+    assert updated["scenario"]["id"] == "renamed_case"
+    assert not (tmp_path / "custom_case.yaml").exists()
+    assert (tmp_path / "renamed_case.yaml").exists()
+
+    loaded = get_scenario("renamed_case", scenario_dir=tmp_path)
+
+    assert loaded["scenario"]["expected"]["final_move"] == "hold"
+
+    deleted = delete_scenario("renamed_case", scenario_dir=tmp_path)
+
+    assert deleted["deleted"] is True
+    assert not (tmp_path / "renamed_case.yaml").exists()

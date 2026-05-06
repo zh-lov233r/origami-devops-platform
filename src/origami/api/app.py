@@ -20,7 +20,13 @@ from origami.benchmark.runner import (
     run_latency_benchmark,
 )
 from origami.core.pipeline import PIC2Pipeline
-from origami.evaluation.scenario_builder import list_scenarios, save_scenario
+from origami.evaluation.scenario_builder import (
+    delete_scenario,
+    get_scenario,
+    list_scenarios,
+    save_scenario,
+    update_scenario,
+)
 from origami.evaluation.scenario_runner import DEFAULT_REPORT_PATH, run_default_scenario_suite
 from origami.persistence.run_history import RunHistoryStore
 
@@ -98,12 +104,36 @@ def scenario_configs() -> dict[str, Any]:
     return list_scenarios()
 
 
+@app.get("/api/scenarios/{scenario_id}")
+def scenario_detail(scenario_id: str) -> dict[str, Any]:
+    try:
+        return get_scenario(scenario_id)
+    except ValueError as exc:
+        raise _scenario_http_error(exc) from exc
+
+
 @app.post("/api/scenarios")
 def scenario_create(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         return save_scenario(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/scenarios/{scenario_id}")
+def scenario_update(scenario_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return update_scenario(scenario_id, payload)
+    except ValueError as exc:
+        raise _scenario_http_error(exc) from exc
+
+
+@app.delete("/api/scenarios/{scenario_id}")
+def scenario_delete(scenario_id: str) -> dict[str, Any]:
+    try:
+        return delete_scenario(scenario_id)
+    except ValueError as exc:
+        raise _scenario_http_error(exc) from exc
 
 
 @app.post("/runs/smoke")
@@ -184,6 +214,11 @@ def _read_jsonl_artifact(path: Path, limit: int) -> dict[str, Any]:
     if parse_errors:
         payload["parse_errors"] = parse_errors
     return payload
+
+
+def _scenario_http_error(exc: ValueError) -> HTTPException:
+    status_code = 404 if "not found" in str(exc).lower() else 400
+    return HTTPException(status_code=status_code, detail=str(exc))
 
 
 if __name__ == "__main__":

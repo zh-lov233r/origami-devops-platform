@@ -169,6 +169,15 @@ body {
   background: #1849a9;
 }
 
+.action-button.danger {
+  border-color: #fda29b;
+  color: var(--red);
+}
+
+.action-button.danger:hover:not(:disabled) {
+  background: var(--red-bg);
+}
+
 .action-button:disabled {
   cursor: not-allowed;
   opacity: 0.62;
@@ -338,6 +347,24 @@ h2 {
   justify-content: flex-end;
   gap: 6px;
   margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.manager-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfd;
+}
+
+.manager-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -993,8 +1020,7 @@ tbody tr.selected {
 }
 
 .builder-toggles,
-.builder-actions,
-.scenario-library {
+.builder-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1103,8 +1129,50 @@ tbody tr.selected {
 }
 
 .scenario-library {
-  min-height: 52px;
-  padding: 12px 16px 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  min-height: 64px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.scenario-item {
+  display: grid;
+  gap: 6px;
+  min-height: 64px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.scenario-item:hover,
+.scenario-item.selected {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.scenario-item strong,
+.scenario-item small {
+  display: block;
+}
+
+.scenario-item strong {
+  font-size: 12px;
+}
+
+.scenario-item small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .notice {

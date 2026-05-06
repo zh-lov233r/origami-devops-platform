@@ -11,6 +11,7 @@ const ENDPOINTS = {
   history: "/api/history/runs?limit=25",
   historyDetail: (recordId) => `/api/history/runs/${encodeURIComponent(recordId)}`,
   scenarios: "/api/scenarios",
+  scenarioDetail: (scenarioId) => `/api/scenarios/${encodeURIComponent(scenarioId)}`,
   saveScenario: "/api/scenarios",
   runScenario: "/runs/scenario",
   runBenchmark: "/runs/benchmark",
@@ -22,11 +23,47 @@ const ACTION_BUTTON_IDS = [
   "refresh-button",
   "save-scenario-button",
   "save-run-scenario-button",
+  "new-scenario-button",
+  "delete-scenario-button",
 ];
 
 const TAB_IDS = ["dashboard", "scenario-builder", "run-history"];
+const DEFAULT_SCENARIO_FORM = {
+  id: "custom_carry_go",
+  name: "Custom Carry & Go",
+  description: "Dashboard-generated Carry & Go scenario.",
+  tags: ["custom", "carry_go"],
+  observation: {
+    mission_type: "carry_go_delivery",
+    position: [0, 0],
+    target: [1, 1],
+    payload_kg: 2,
+    payload_locked: true,
+    battery_pct: 80,
+    nearest_human_distance_m: 2,
+    state_age_s: 0,
+    floor_mu_observed: 0.52,
+    camera_lux_current: 480,
+    imu_vibration_rms: 0.08,
+    payload_scale_reading_kg: 2,
+    payload_reference_kg: 2,
+    fleet_context: {
+      nearby_robots: 0,
+      corridor_occupied: false,
+      elevator_queue: 0,
+    },
+  },
+  expected: {
+    final_move: "east",
+    seom_passed: true,
+    audit_valid: true,
+  },
+};
 let selectedHistoryRunId = null;
 let selectedHistoryDetailPayload = null;
+let selectedScenarioId = null;
+let selectedScenarioSnapshot = null;
+let scenarioLibraryRecords = [];
 
 document.addEventListener("DOMContentLoaded", () => {
   registerTabs();
@@ -77,7 +114,11 @@ async function fetchJson(url) {
 }
 
 async function postJson(url, payload = null) {
-  const options = { method: "POST" };
+  return requestJson("POST", url, payload);
+}
+
+async function requestJson(method, url, payload = null) {
+  const options = { method };
   if (payload !== null) {
     options.headers = { "Content-Type": "application/json" };
     options.body = JSON.stringify(payload);
@@ -156,6 +197,19 @@ function registerScenarioBuilder() {
   document.getElementById("save-run-scenario-button").addEventListener("click", () => {
     saveScenarioFromBuilder(true);
   });
+  document.getElementById("new-scenario-button").addEventListener("click", () => {
+    resetScenarioManagerForm();
+  });
+  document.getElementById("delete-scenario-button").addEventListener("click", () => {
+    deleteSelectedScenario();
+  });
+  document.getElementById("scenario-library-list").addEventListener("click", (event) => {
+    const item = closestFromEvent(event, "[data-scenario-id]");
+    if (!item) {
+      return;
+    }
+    loadScenarioForEdit(item.dataset.scenarioId);
+  });
 }
 
 function registerHistoryDetails() {
@@ -203,12 +257,19 @@ async function runDashboardAction(label, url) {
 
 async function saveScenarioFromBuilder(runAfterSave) {
   setActionBusy(true);
-  setBuilderStatus("Saving scenario", "info");
+  const editingScenarioId = selectedScenarioId;
+  setBuilderStatus(editingScenarioId ? "Updating scenario" : "Creating scenario", "info");
 
   try {
-    const saved = await postJson(ENDPOINTS.saveScenario, buildScenarioPayload());
+    const payload = buildScenarioPayload();
+    const saved = editingScenarioId
+      ? await requestJson("PUT", ENDPOINTS.scenarioDetail(editingScenarioId), payload)
+      : await postJson(ENDPOINTS.saveScenario, payload);
+    selectedScenarioId = saved.scenario.id;
+    selectedScenarioSnapshot = clonePlainObject({ ...payload, id: saved.scenario.id });
     await loadDashboard();
-    setBuilderStatus(`Saved ${saved.scenario.id}`, "pass");
+    setScenarioManagerMode("edit", saved.scenario.id);
+    setBuilderStatus(`${editingScenarioId ? "Updated" : "Created"} ${saved.scenario.id}`, "pass");
 
     if (runAfterSave) {
       setActionStatus("Scenario run running", "info");
@@ -218,6 +279,55 @@ async function saveScenarioFromBuilder(runAfterSave) {
     }
   } catch (error) {
     setBuilderStatus(error.message, "fail");
+  } finally {
+    setActionBusy(false);
+  }
+}
+
+async function loadScenarioForEdit(scenarioId) {
+  setActionBusy(true);
+  setBuilderStatus(`Loading ${scenarioId}`, "info");
+
+  try {
+    const payload = await fetchJson(ENDPOINTS.scenarioDetail(scenarioId));
+    selectedScenarioId = payload.scenario.id;
+    selectedScenarioSnapshot = clonePlainObject(payload.scenario);
+    populateScenarioForm(payload.scenario);
+    setScenarioManagerMode("edit", payload.scenario.id);
+    renderScenarioLibrary({
+      scenarios: scenarioLibraryRecords,
+      count: scenarioLibraryRecords.length,
+      available: true,
+    });
+    setBuilderStatus(`Editing ${payload.scenario.id}`, "pass");
+  } catch (error) {
+    setBuilderStatus(`Load failed: ${error.message}`, "fail");
+  } finally {
+    setActionBusy(false);
+  }
+}
+
+async function deleteSelectedScenario() {
+  if (!selectedScenarioId) {
+    setBuilderStatus("Select a scenario to delete", "fail");
+    return;
+  }
+
+  const scenarioId = selectedScenarioId;
+  if (!window.confirm(`Delete scenario "${scenarioId}"?`)) {
+    return;
+  }
+
+  setActionBusy(true);
+  setBuilderStatus(`Deleting ${scenarioId}`, "info");
+
+  try {
+    await requestJson("DELETE", ENDPOINTS.scenarioDetail(scenarioId));
+    resetScenarioManagerForm();
+    await loadDashboard();
+    setBuilderStatus(`Deleted ${scenarioId}`, "pass");
+  } catch (error) {
+    setBuilderStatus(`Delete failed: ${error.message}`, "fail");
   } finally {
     setActionBusy(false);
   }
@@ -251,26 +361,32 @@ function toggleHistoryDetail(recordId) {
 }
 
 function buildScenarioPayload() {
+  const baseScenario = selectedScenarioSnapshot ? clonePlainObject(selectedScenarioSnapshot) : {};
+  const baseObservation = baseScenario.observation || {};
+  const baseExpected = baseScenario.expected || {};
+  const payloadKg = numberValue("builder-payload-kg");
+
   const observation = {
+    ...baseObservation,
     mission_type: "carry_go_delivery",
     position: [numberValue("builder-position-x"), numberValue("builder-position-y")],
     target: [numberValue("builder-target-x"), numberValue("builder-target-y")],
-    sensor_bias: 0.01,
-    payload_kg: numberValue("builder-payload-kg"),
+    sensor_bias: numberOrFallback(baseObservation.sensor_bias, 0.01),
+    payload_kg: payloadKg,
     payload_locked: checkedValue("builder-payload-locked"),
     battery_pct: numberValue("builder-battery-pct"),
     nearest_human_distance_m: numberValue("builder-human-distance"),
     state_age_s: numberValue("builder-state-age"),
     sensor_blackout: checkedValue("builder-sensor-blackout"),
     floor_mu_observed: numberValue("builder-floor-mu"),
-    camera_lux_reference: 500,
+    camera_lux_reference: numberOrFallback(baseObservation.camera_lux_reference, 500),
     camera_lux_current: numberValue("builder-camera-lux"),
-    camera_sharpness: 0.96,
+    camera_sharpness: numberOrFallback(baseObservation.camera_sharpness, 0.96),
     imu_vibration_rms: numberValue("builder-imu-vibration"),
-    payload_scale_reading_kg:
-      numberValue("builder-payload-kg") + numberValue("builder-payload-bias"),
-    payload_reference_kg: numberValue("builder-payload-kg"),
+    payload_scale_reading_kg: payloadKg + numberValue("builder-payload-bias"),
+    payload_reference_kg: numberOrFallback(baseObservation.payload_reference_kg, payloadKg),
     fleet_context: {
+      ...(baseObservation.fleet_context || {}),
       nearby_robots: numberValue("builder-nearby-robots"),
       corridor_occupied: checkedValue("builder-corridor-occupied"),
       elevator_queue: numberValue("builder-elevator-queue"),
@@ -281,12 +397,17 @@ function buildScenarioPayload() {
   const privacyZones = listValue("builder-privacy-zones");
   if (currentZone) {
     observation.current_zone = currentZone;
+  } else {
+    delete observation.current_zone;
   }
   if (privacyZones.length) {
     observation.privacy_zones = privacyZones;
+  } else {
+    delete observation.privacy_zones;
   }
 
   const expected = {
+    ...baseExpected,
     final_move: textValue("builder-final-move"),
     seom_passed: checkedValue("builder-seom-passed"),
     audit_valid: true,
@@ -296,14 +417,20 @@ function buildScenarioPayload() {
   const violations = listValue("builder-violations");
   if (stumGate) {
     expected.stum_gate = stumGate;
+  } else {
+    delete expected.stum_gate;
   }
   if (routeStrategy) {
     expected.route_strategy = routeStrategy;
+  } else {
+    delete expected.route_strategy;
   }
   if (violations.length) {
     expected.expected_violations = violations;
+    delete expected.required_absent_violations;
   } else {
     expected.required_absent_violations = ["C01_person_stop_300mm", "C07_battery_return_15pct"];
+    delete expected.expected_violations;
   }
 
   return {
@@ -313,8 +440,70 @@ function buildScenarioPayload() {
     tags: listValue("builder-tags"),
     observation,
     expected,
-    overwrite: checkedValue("builder-overwrite"),
+    overwrite: selectedScenarioId !== null,
   };
+}
+
+function resetScenarioManagerForm() {
+  selectedScenarioId = null;
+  selectedScenarioSnapshot = null;
+  populateScenarioForm(DEFAULT_SCENARIO_FORM);
+  setScenarioManagerMode("create");
+  renderScenarioLibrary({
+    scenarios: scenarioLibraryRecords,
+    count: scenarioLibraryRecords.length,
+    available: true,
+  });
+  setBuilderStatus("Create a new scenario or select one to edit", "");
+}
+
+function populateScenarioForm(scenario) {
+  const observation = scenario.observation || {};
+  const expected = scenario.expected || {};
+  const fleetContext = observation.fleet_context || {};
+  const position = Array.isArray(observation.position) ? observation.position : [0, 0];
+  const target = Array.isArray(observation.target) ? observation.target : [1, 1];
+  const payloadKg = numberOrFallback(observation.payload_kg, 2);
+  const payloadScale = numberOrFallback(observation.payload_scale_reading_kg, payloadKg);
+
+  setInputValue("builder-id", scenario.id || "custom_carry_go");
+  setInputValue("builder-name", scenario.name || "Custom Carry & Go");
+  setInputValue("builder-tags", (scenario.tags || ["custom", "carry_go"]).join(","));
+  setInputValue("builder-description", scenario.description || "");
+  setInputValue("builder-position-x", numberOrFallback(position[0], 0));
+  setInputValue("builder-position-y", numberOrFallback(position[1], 0));
+  setInputValue("builder-target-x", numberOrFallback(target[0], 1));
+  setInputValue("builder-target-y", numberOrFallback(target[1], 1));
+  setInputValue("builder-payload-kg", payloadKg);
+  setInputValue("builder-battery-pct", numberOrFallback(observation.battery_pct, 80));
+  setInputValue(
+    "builder-human-distance",
+    numberOrFallback(observation.nearest_human_distance_m, 2),
+  );
+  setInputValue("builder-final-move", expected.final_move || "east");
+  setCheckedValue("builder-payload-locked", observation.payload_locked !== false);
+  setCheckedValue("builder-seom-passed", expected.seom_passed !== false);
+  setInputValue("builder-state-age", numberOrFallback(observation.state_age_s, 0));
+  setInputValue("builder-floor-mu", numberOrFallback(observation.floor_mu_observed, 0.52));
+  setInputValue("builder-camera-lux", numberOrFallback(observation.camera_lux_current, 480));
+  setInputValue("builder-imu-vibration", numberOrFallback(observation.imu_vibration_rms, 0.08));
+  setInputValue("builder-payload-bias", payloadScale - payloadKg);
+  setInputValue("builder-current-zone", observation.current_zone || "");
+  setInputValue("builder-privacy-zones", (observation.privacy_zones || []).join(","));
+  setInputValue("builder-nearby-robots", numberOrFallback(fleetContext.nearby_robots, 0));
+  setInputValue("builder-elevator-queue", numberOrFallback(fleetContext.elevator_queue, 0));
+  setInputValue("builder-stum-gate", expected.stum_gate || "");
+  setInputValue("builder-route-strategy", expected.route_strategy || "");
+  setInputValue("builder-violations", (expected.expected_violations || []).join(","));
+  setCheckedValue("builder-sensor-blackout", Boolean(observation.sensor_blackout));
+  setCheckedValue("builder-corridor-occupied", Boolean(fleetContext.corridor_occupied));
+}
+
+function setScenarioManagerMode(mode, scenarioId = null) {
+  const isEdit = mode === "edit";
+  setPill("scenario-manager-mode-chip", isEdit ? "EDIT" : "CREATE", isEdit ? "info" : "neutral");
+  setText("scenario-manager-title", isEdit ? `Editing ${scenarioId}` : "New Scenario");
+  document.getElementById("delete-scenario-button").disabled = !isEdit;
 }
 
 async function refreshArtifacts() {
@@ -335,6 +524,9 @@ function setActionBusy(isBusy) {
   ACTION_BUTTON_IDS.forEach((id) => {
     document.getElementById(id).disabled = isBusy;
   });
+  if (!isBusy) {
+    document.getElementById("delete-scenario-button").disabled = !selectedScenarioId;
+  }
 }
 
 function setActionStatus(message, kind) {
@@ -594,17 +786,37 @@ function renderScenarioTable(report) {
 
 function renderScenarioLibrary(payload) {
   const scenarios = payload?.scenarios || [];
+  scenarioLibraryRecords = scenarios;
+  if (selectedScenarioId && !scenarios.some((scenario) => scenario.id === selectedScenarioId)) {
+    selectedScenarioId = null;
+    selectedScenarioSnapshot = null;
+    setScenarioManagerMode("create");
+  }
   const container = document.getElementById("scenario-library-list");
   setPill("scenario-library-chip", `${payload?.count || 0} YAML`, payload?.available ? "info" : "warn");
 
   if (!scenarios.length) {
-    container.innerHTML = `<span class="token">No scenario YAML files</span>`;
+    container.innerHTML = `<div class="notice">No scenario YAML files</div>`;
     return;
   }
 
   container.innerHTML = scenarios
-    .slice(-12)
-    .map((scenario) => `<span class="token info">${escapeHtml(scenario.id)}</span>`)
+    .map((scenario) => {
+      const selectedClass = scenario.id === selectedScenarioId ? "selected" : "";
+      return `
+        <button
+          class="scenario-item ${selectedClass}"
+          type="button"
+          data-scenario-id="${escapeHtml(scenario.id)}"
+        >
+          <span>
+            <strong>${escapeHtml(scenario.name || scenario.id)}</strong>
+            <small>${escapeHtml(scenario.id)}</small>
+          </span>
+          ${renderTags(scenario.tags)}
+        </button>
+      `;
+    })
     .join("");
 }
 
@@ -1178,6 +1390,10 @@ function closestFromEvent(event, selector) {
   return event.target instanceof Element ? event.target.closest(selector) : null;
 }
 
+function clonePlainObject(value) {
+  return JSON.parse(JSON.stringify(value || {}));
+}
+
 function totalCount(counts) {
   return Object.values(counts || {}).reduce((total, value) => total + Number(value || 0), 0);
 }
@@ -1212,13 +1428,26 @@ function textValue(id) {
   return document.getElementById(id).value.trim();
 }
 
+function setInputValue(id, value) {
+  document.getElementById(id).value = value;
+}
+
 function numberValue(id) {
   const value = Number(document.getElementById(id).value);
   return Number.isFinite(value) ? value : 0;
 }
 
+function numberOrFallback(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function checkedValue(id) {
   return document.getElementById(id).checked;
+}
+
+function setCheckedValue(id, value) {
+  document.getElementById(id).checked = Boolean(value);
 }
 
 function listValue(id) {
