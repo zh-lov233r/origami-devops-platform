@@ -49,3 +49,20 @@ def test_run_history_records_scenario_and_benchmark(tmp_path: Path) -> None:
     assert benchmark_record["steps"] == 20
     assert Path(scenario_record["artifact_path"]).exists()
     assert Path(benchmark_record["artifact_path"]).exists()
+
+    detail = store.get(scenario_record["id"])
+
+    assert detail["available"] is True
+    assert detail["record"]["id"] == scenario_record["id"]
+    assert detail["data"]["suite"] == "carry_go"
+    assert detail["data"]["summary"]["module_latency_ms"]["seom"]["p95"] == 0.02
+
+
+def test_run_history_detail_reports_missing_record(tmp_path: Path) -> None:
+    store = RunHistoryStore(tmp_path)
+
+    detail = store.get("scenario-missing")
+
+    assert detail["available"] is False
+    assert detail["record"] is None
+    assert detail["data"] is None

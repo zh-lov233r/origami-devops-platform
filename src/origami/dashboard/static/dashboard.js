@@ -9,6 +9,7 @@ const ENDPOINTS = {
   events: "/api/events/scenario?limit=500",
   audit: "/api/audit/scenario?limit=100",
   history: "/api/history/runs?limit=25",
+  historyDetail: (recordId) => `/api/history/runs/${encodeURIComponent(recordId)}`,
   scenarios: "/api/scenarios",
   saveScenario: "/api/scenarios",
   runScenario: "/runs/scenario",
@@ -24,11 +25,14 @@ const ACTION_BUTTON_IDS = [
 ];
 
 const TAB_IDS = ["dashboard", "scenario-builder", "run-history"];
+let selectedHistoryRunId = null;
+let selectedHistoryDetailPayload = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   registerTabs();
   registerActionButtons();
   registerScenarioBuilder();
+  registerHistoryDetails();
   loadDashboard();
 });
 
@@ -154,6 +158,34 @@ function registerScenarioBuilder() {
   });
 }
 
+function registerHistoryDetails() {
+  const tableBody = document.getElementById("history-table-body");
+  tableBody.addEventListener("click", (event) => {
+    const moreButton = closestFromEvent(event, "[data-history-more-button]");
+    if (moreButton) {
+      toggleHistoryMore(moreButton);
+      return;
+    }
+
+    const row = closestFromEvent(event, "[data-history-row-id]");
+    if (!row) {
+      return;
+    }
+    toggleHistoryDetail(row.dataset.historyRowId);
+  });
+  tableBody.addEventListener("keydown", (event) => {
+    if (!["Enter", " "].includes(event.key)) {
+      return;
+    }
+    const row = closestFromEvent(event, "[data-history-row-id]");
+    if (!row) {
+      return;
+    }
+    event.preventDefault();
+    toggleHistoryDetail(row.dataset.historyRowId);
+  });
+}
+
 async function runDashboardAction(label, url) {
   setActionBusy(true);
   setActionStatus(`${label} running`, "info");
@@ -189,6 +221,33 @@ async function saveScenarioFromBuilder(runAfterSave) {
   } finally {
     setActionBusy(false);
   }
+}
+
+async function loadHistoryDetail(recordId) {
+  selectedHistoryRunId = recordId;
+  selectedHistoryDetailPayload = null;
+  markSelectedHistoryRow(recordId);
+  renderHistoryDetailLoading(recordId);
+
+  try {
+    const payload = await fetchJson(ENDPOINTS.historyDetail(recordId));
+    selectedHistoryDetailPayload = payload;
+    renderHistoryDetail(payload);
+    markSelectedHistoryRow(recordId);
+  } catch (error) {
+    selectedHistoryDetailPayload = null;
+    renderHistoryDetailError(recordId, error);
+  }
+}
+
+function toggleHistoryDetail(recordId) {
+  if (selectedHistoryRunId === recordId && findHistoryDetailRow(recordId)) {
+    renderHistoryDetailEmpty();
+    markSelectedHistoryRow(null);
+    return;
+  }
+
+  loadHistoryDetail(recordId);
 }
 
 function buildScenarioPayload() {
@@ -665,14 +724,22 @@ function renderHistory(historyPayload) {
 
   if (!records.length) {
     tableBody.innerHTML = `<tr><td colspan="7" class="empty-cell">No dashboard-triggered runs yet</td></tr>`;
+    renderHistoryDetailEmpty();
     return;
   }
 
   tableBody.innerHTML = records
     .map((record) => {
       const resultKind = record.quality_gate_passed ? "pass" : "fail";
+      const selectedClass = record.id === selectedHistoryRunId ? "selected" : "";
       return `
-        <tr>
+        <tr
+          class="history-click-row ${selectedClass}"
+          data-history-row-id="${escapeHtml(record.id)}"
+          tabindex="0"
+          role="button"
+          aria-label="View run details for ${escapeHtml(record.id)}"
+        >
           <td>
             <div class="history-run">
               <strong>${formatTimestamp(record.generated_at || record.recorded_at)}</strong>
@@ -689,6 +756,369 @@ function renderHistory(historyPayload) {
       `;
     })
     .join("");
+
+  if (selectedHistoryRunId && !records.some((record) => record.id === selectedHistoryRunId)) {
+    renderHistoryDetailEmpty();
+  } else if (selectedHistoryDetailPayload?.id === selectedHistoryRunId) {
+    renderHistoryDetail(selectedHistoryDetailPayload);
+  } else {
+    markSelectedHistoryRow(selectedHistoryRunId);
+  }
+}
+
+function renderHistoryDetail(payload) {
+  const record = payload.record || {};
+  const report = payload.data || {};
+  const resultKind = record.quality_gate_passed ? "pass" : "fail";
+  const runLabel = `${record.type || "run"} ${formatTimestamp(record.generated_at || record.recorded_at)}`;
+
+  if (!payload.available) {
+    setHistoryDetailRow(
+      record.id || payload.id,
+      "Run Detail Error",
+      "ERROR",
+      "fail",
+      `<div class="notice">${escapeHtml(payload.error || "Run snapshot unavailable")}</div>`,
+    );
+    return;
+  }
+
+  const detailContent =
+    record.type === "scenario"
+      ? renderHistoryScenarioDetail(report)
+      : renderHistoryBenchmarkDetail(report);
+
+  const body = `
+    <div class="detail-stat-grid">
+      ${renderDetailStat("Type", record.type || "--")}
+      ${renderDetailStat("Scope", historyScope(record))}
+      ${renderDetailStat("Max P95", `${formatNumber(record.max_module_p95_ms)} ms`)}
+      ${renderDetailStat("Recorded", formatTimestamp(record.recorded_at))}
+      ${renderDetailStat("Artifact", shortPath(payload.path || record.artifact_path))}
+      ${renderDetailStat("Run ID", record.id || "--")}
+    </div>
+    ${detailContent}
+    <div class="history-more-actions">
+      <button
+        class="action-button"
+        type="button"
+        data-history-more-button
+        aria-expanded="false"
+      >
+        Browse More
+      </button>
+    </div>
+    <div class="history-more-panel" data-history-more-panel hidden>
+      ${renderHistoryMoreData(record, report)}
+    </div>
+  `;
+
+  setHistoryDetailRow(
+    record.id || payload.id,
+    runLabel,
+    record.quality_gate_passed ? "PASS" : "FAIL",
+    resultKind,
+    body,
+  );
+}
+
+function renderHistoryDetailEmpty() {
+  selectedHistoryRunId = null;
+  selectedHistoryDetailPayload = null;
+  removeHistoryDetailRow();
+}
+
+function renderHistoryDetailLoading(recordId) {
+  setHistoryDetailRow(
+    recordId,
+    "Loading Run",
+    "LOADING",
+    "info",
+    `<div class="notice">Loading run snapshot</div>`,
+  );
+}
+
+function renderHistoryDetailError(recordId, error) {
+  setHistoryDetailRow(
+    recordId,
+    "Run Detail Error",
+    "ERROR",
+    "fail",
+    `<div class="notice">${escapeHtml(error.message)}</div>`,
+  );
+}
+
+function setHistoryDetailRow(recordId, title, chipText, chipKind, bodyHtml) {
+  removeHistoryDetailRow();
+  const row = findHistoryRow(recordId);
+  if (!row) {
+    return;
+  }
+
+  const detailRow = document.createElement("tr");
+  detailRow.className = "history-detail-row";
+  detailRow.dataset.historyDetailFor = recordId;
+  detailRow.innerHTML = `
+    <td colspan="7">
+      <div class="history-detail">
+        <div class="history-detail-heading">
+          <div>
+            <p class="eyebrow">Run Details</p>
+            <h2>${escapeHtml(title)}</h2>
+          </div>
+          <span class="status-pill ${chipKind}">${escapeHtml(chipText)}</span>
+        </div>
+        <div class="history-detail-body">
+          ${bodyHtml}
+        </div>
+      </div>
+    </td>
+  `;
+  row.insertAdjacentElement("afterend", detailRow);
+}
+
+function removeHistoryDetailRow() {
+  document.querySelectorAll(".history-detail-row").forEach((row) => {
+    row.remove();
+  });
+}
+
+function findHistoryRow(recordId) {
+  return [...document.querySelectorAll("[data-history-row-id]")]
+    .find((row) => row.dataset.historyRowId === recordId);
+}
+
+function findHistoryDetailRow(recordId) {
+  return [...document.querySelectorAll("[data-history-detail-for]")]
+    .find((row) => row.dataset.historyDetailFor === recordId);
+}
+
+function toggleHistoryMore(button) {
+  const detailRow = button.closest(".history-detail-row");
+  const panel = detailRow?.querySelector("[data-history-more-panel]");
+  const isOpen = panel && !panel.hidden;
+  if (panel) {
+    panel.hidden = isOpen;
+  }
+  button.textContent = isOpen ? "Browse More" : "Show Less";
+  button.setAttribute("aria-expanded", String(!isOpen));
+}
+
+function renderHistoryScenarioDetail(report) {
+  const scenarios = report.scenarios || [];
+  const latency = report.summary?.module_latency_ms || {};
+  const violationCounts = report.summary?.violation_counts || {};
+
+  return `
+    <div class="history-detail-section">
+      <div class="detail-section-heading">
+        <h3>Scenario Summary</h3>
+        <span class="status-pill ${report.quality_gate_passed ? "pass" : "fail"}">
+          ${report.passed || 0}/${report.total || 0} PASS
+        </span>
+      </div>
+      <div class="detail-stat-grid compact">
+        ${renderDetailStat("Suite", report.suite || "--")}
+        ${renderDetailStat("Pass Rate", formatPercent(report.pass_rate))}
+        ${renderDetailStat("Failed", String(report.failed || 0))}
+        ${renderDetailStat("Violations", String(totalCount(violationCounts)))}
+      </div>
+      ${renderDetailLatency(latency)}
+      ${renderHistoryScenarioRows(scenarios)}
+    </div>
+  `;
+}
+
+function renderHistoryBenchmarkDetail(report) {
+  const latency = report.module_latency_ms || {};
+
+  return `
+    <div class="history-detail-section">
+      <div class="detail-section-heading">
+        <h3>Benchmark Summary</h3>
+        <span class="status-pill ${report.audit_valid ? "pass" : "fail"}">
+          AUDIT ${report.audit_valid ? "PASS" : "FAIL"}
+        </span>
+      </div>
+      <div class="detail-stat-grid compact">
+        ${renderDetailStat("Steps", String(report.steps || 0))}
+        ${renderDetailStat("Threshold", `${formatNumber(report.thresholds?.max_module_p95_ms)} ms`)}
+        ${renderDetailStat("Audit", report.audit_valid ? "valid" : "invalid")}
+        ${renderDetailStat("Gate", report.quality_gate_passed ? "pass" : "fail")}
+      </div>
+      ${renderDetailLatency(latency)}
+    </div>
+  `;
+}
+
+function renderHistoryMoreData(record, report) {
+  const checkDetails = record.type === "scenario" ? renderScenarioCheckDetails(report.scenarios || []) : "";
+
+  return `
+    ${checkDetails}
+    <div class="raw-snapshot">
+      <div class="raw-snapshot-heading">Raw Snapshot</div>
+      <pre>${escapeHtml(JSON.stringify(report, null, 2))}</pre>
+    </div>
+  `;
+}
+
+function renderScenarioCheckDetails(scenarios) {
+  const checks = scenarios.flatMap((scenario) =>
+    (scenario.checks || []).map((check) => ({
+      scenarioId: scenario.id,
+      ...check,
+    })),
+  );
+
+  if (!checks.length) {
+    return `<div class="notice">No scenario check records in snapshot</div>`;
+  }
+
+  return `
+    <div class="history-detail-section">
+      <div class="detail-section-heading">
+        <h3>Scenario Checks</h3>
+        <span class="status-pill info">${checks.length} CHECKS</span>
+      </div>
+      <div class="detail-table-wrap">
+        <table class="detail-table check-detail-table">
+          <thead>
+            <tr>
+              <th>Scenario</th>
+              <th>Check</th>
+              <th>Result</th>
+              <th>Expected</th>
+              <th>Actual</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${checks
+              .map(
+                (check) => `
+                  <tr>
+                    <td>${escapeHtml(check.scenarioId || "--")}</td>
+                    <td>${escapeHtml(check.name || "--")}</td>
+                    <td>
+                      <span class="status-pill ${check.passed ? "pass" : "fail"}">
+                        ${check.passed ? "PASS" : "FAIL"}
+                      </span>
+                    </td>
+                    <td><code>${escapeHtml(formatDetailValue(check.expected))}</code></td>
+                    <td><code>${escapeHtml(formatDetailValue(check.actual))}</code></td>
+                  </tr>
+                `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderHistoryScenarioRows(scenarios) {
+  if (!scenarios.length) {
+    return `<div class="notice">No scenario records in snapshot</div>`;
+  }
+
+  return `
+    <div class="detail-table-wrap">
+      <table class="detail-table">
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Result</th>
+            <th>Move</th>
+            <th>STUM</th>
+            <th>Route</th>
+            <th>Fleet</th>
+            <th>Violations</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${scenarios
+            .map((scenario) => {
+              const actual = scenario.actual || {};
+              return `
+                <tr>
+                  <td>
+                    <div class="history-run">
+                      <strong>${escapeHtml(scenario.name || scenario.id)}</strong>
+                      <span>${escapeHtml(scenario.id || "--")}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-pill ${scenario.passed ? "pass" : "fail"}">
+                      ${scenario.passed ? "PASS" : "FAIL"}
+                    </span>
+                  </td>
+                  <td>${escapeHtml(actual.final_move || "--")}</td>
+                  <td>${escapeHtml(actual.stum_gate || "--")}</td>
+                  <td>${escapeHtml(actual.route_strategy || "--")}</td>
+                  <td>${escapeHtml(actual.fleet_adjustment || "--")}</td>
+                  <td>${renderViolationTokens(actual.violations || [])}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDetailLatency(metrics) {
+  const modules = Object.entries(metrics || {});
+  if (!modules.length) {
+    return `<div class="notice">No latency metrics in snapshot</div>`;
+  }
+
+  return `
+    <div class="detail-table-wrap">
+      <table class="detail-table latency-detail-table">
+        <thead>
+          <tr>
+            <th>Module</th>
+            <th>Avg ms</th>
+            <th>P50 ms</th>
+            <th>P95 ms</th>
+            <th>Max ms</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${modules
+            .map(
+              ([moduleName, item]) => `
+                <tr>
+                  <td><strong>${escapeHtml(moduleName)}</strong></td>
+                  <td>${formatNumber(item.avg)}</td>
+                  <td>${formatNumber(item.p50)}</td>
+                  <td>${formatNumber(item.p95)}</td>
+                  <td>${formatNumber(item.max)}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDetailStat(label, value) {
+  return `
+    <div class="detail-stat">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </div>
+  `;
+}
+
+function markSelectedHistoryRow(recordId) {
+  document.querySelectorAll("[data-history-row-id]").forEach((row) => {
+    row.classList.toggle("selected", row.dataset.historyRowId === recordId);
+  });
 }
 
 function renderFatalError(error) {
@@ -742,6 +1172,14 @@ function countBy(records, key) {
     accumulator[value] = (accumulator[value] || 0) + 1;
     return accumulator;
   }, {});
+}
+
+function closestFromEvent(event, selector) {
+  return event.target instanceof Element ? event.target.closest(selector) : null;
+}
+
+function totalCount(counts) {
+  return Object.values(counts || {}).reduce((total, value) => total + Number(value || 0), 0);
 }
 
 function gateText(value, available) {
@@ -835,6 +1273,16 @@ function formatUnixTimestamp(value) {
     return "--";
   }
   return new Date(value * 1000).toLocaleString();
+}
+
+function formatDetailValue(value) {
+  if (value === undefined || value === null) {
+    return "--";
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return JSON.stringify(value);
 }
 
 function shortHash(value) {

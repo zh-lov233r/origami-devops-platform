@@ -70,6 +70,53 @@ class RunHistoryStore:
             payload["parse_errors"] = parse_errors
         return payload
 
+    def get(self, record_id: str) -> dict[str, Any]:
+        """Return one history record with its full persisted report snapshot."""
+        history = self.list(limit=10_000)
+        record = next(
+            (item for item in history["records"] if item.get("id") == record_id),
+            None,
+        )
+        if record is None:
+            return {
+                "available": False,
+                "id": record_id,
+                "record": None,
+                "data": None,
+                "error": "Run history record not found",
+            }
+
+        artifact_path = Path(str(record.get("artifact_path", "")))
+        if not artifact_path.exists():
+            return {
+                "available": False,
+                "id": record_id,
+                "record": record,
+                "data": None,
+                "path": str(artifact_path),
+                "error": "Run history snapshot not found",
+            }
+
+        try:
+            snapshot = json.loads(artifact_path.read_text())
+        except json.JSONDecodeError as exc:
+            return {
+                "available": False,
+                "id": record_id,
+                "record": record,
+                "data": None,
+                "path": str(artifact_path),
+                "error": f"Invalid JSON at line {exc.lineno}, column {exc.colno}: {exc.msg}",
+            }
+
+        return {
+            "available": True,
+            "id": record_id,
+            "record": record,
+            "data": snapshot,
+            "path": str(artifact_path),
+        }
+
 
 def _record_id(run_type: str, report: dict[str, Any]) -> str:
     generated_at = str(report.get("generated_at") or datetime.now(UTC).isoformat())

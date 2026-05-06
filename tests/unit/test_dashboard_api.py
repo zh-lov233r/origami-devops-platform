@@ -11,6 +11,7 @@ from origami.api.app import (
     benchmark_report,
     dashboard,
     run_history,
+    run_history_detail,
     scenario_configs,
     scenario_audit,
     scenario_events,
@@ -28,6 +29,7 @@ def test_dashboard_routes_are_registered() -> None:
     assert "/api/events/scenario" in route_paths
     assert "/api/audit/scenario" in route_paths
     assert "/api/history/runs" in route_paths
+    assert "/api/history/runs/{record_id}" in route_paths
     assert "/api/scenarios" in route_paths
     assert "/runs/scenario" in route_paths
     assert "/runs/benchmark" in route_paths
@@ -91,6 +93,13 @@ def test_dashboard_history_endpoint_returns_recent_runs() -> None:
     assert history_payload["count"] >= 2
     assert len(history_payload["records"]) <= 5
     assert history_payload["records"][0]["type"] in {"scenario", "benchmark"}
+
+    detail_payload = run_history_detail(history_payload["records"][0]["id"])
+
+    assert {"available", "path", "record", "data"} <= set(detail_payload)
+    assert detail_payload["available"] is True
+    assert detail_payload["record"]["id"] == history_payload["records"][0]["id"]
+    assert detail_payload["data"]["quality_gate_passed"] is True
 
 
 def test_dashboard_scenario_config_endpoint_lists_yaml() -> None:

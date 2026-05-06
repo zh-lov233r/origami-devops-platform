@@ -37,6 +37,14 @@ app.mount(
 )
 
 
+@app.middleware("http")
+async def no_cache_dashboard_assets(request: Any, call_next: Any) -> Any:
+    response = await call_next(request)
+    if request.url.path == "/dashboard" or request.url.path.startswith("/dashboard/static/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -75,6 +83,14 @@ def scenario_audit(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
 @app.get("/api/history/runs")
 def run_history(limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
     return RUN_HISTORY.list(limit)
+
+
+@app.get("/api/history/runs/{record_id}")
+def run_history_detail(record_id: str) -> dict[str, Any]:
+    payload = RUN_HISTORY.get(record_id)
+    if not payload["available"] and payload.get("record") is None:
+        raise HTTPException(status_code=404, detail=payload["error"])
+    return payload
 
 
 @app.get("/api/scenarios")
