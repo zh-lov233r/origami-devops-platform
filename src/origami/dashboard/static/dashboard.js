@@ -14,6 +14,7 @@ const ENDPOINTS = {
   scenarioDetail: (scenarioId) => `/api/scenarios/${encodeURIComponent(scenarioId)}`,
   saveScenario: "/api/scenarios",
   runScenario: "/runs/scenario",
+  runScenarioById: (scenarioId) => `/runs/scenario/${encodeURIComponent(scenarioId)}`,
   runBenchmark: "/runs/benchmark",
 };
 
@@ -21,13 +22,18 @@ const ACTION_BUTTON_IDS = [
   "run-scenario-button",
   "run-benchmark-button",
   "refresh-button",
+  "test-run-selected-scenario-button",
   "save-scenario-button",
   "save-run-scenario-button",
   "new-scenario-button",
+  "select-all-scenarios-button",
+  "clear-scenario-selection-button",
+  "duplicate-scenario-button",
   "delete-scenario-button",
+  "run-selected-scenario-button",
 ];
 
-const TAB_IDS = ["dashboard", "scenario-builder", "run-history"];
+const TAB_IDS = ["dashboard", "scenario-builder", "test-lab", "run-history"];
 const DEFAULT_SCENARIO_FORM = {
   id: "custom_carry_go",
   name: "Custom Carry & Go",
@@ -63,13 +69,20 @@ let selectedHistoryRunId = null;
 let selectedHistoryDetailPayload = null;
 let selectedScenarioId = null;
 let selectedScenarioSnapshot = null;
+let selectedScenarioIds = new Set();
+let scenarioDraftBaseSnapshot = null;
 let scenarioLibraryRecords = [];
+let latestScenarioPreview = null;
+let testLabSelectedScenarioId = null;
+let latestTestLabResult = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   registerTabs();
   registerActionButtons();
+  registerTestLab();
   registerScenarioBuilder();
   registerHistoryDetails();
+  renderScenarioDraftAssist();
   loadDashboard();
 });
 
@@ -141,14 +154,33 @@ async function errorMessage(response, url) {
 }
 
 function registerActionButtons() {
-  document.getElementById("run-scenario-button").addEventListener("click", () => {
-    runDashboardAction("Scenario run", ENDPOINTS.runScenario);
-  });
-  document.getElementById("run-benchmark-button").addEventListener("click", () => {
-    runDashboardAction("Benchmark run", ENDPOINTS.runBenchmark);
-  });
   document.getElementById("refresh-button").addEventListener("click", () => {
     refreshArtifacts();
+  });
+}
+
+function registerTestLab() {
+  document.getElementById("run-scenario-button").addEventListener("click", () => {
+    runTestLabAction("Scenario suite", ENDPOINTS.runScenario, "scenario");
+  });
+  document.getElementById("run-benchmark-button").addEventListener("click", () => {
+    runTestLabAction("Benchmark", ENDPOINTS.runBenchmark, "benchmark");
+  });
+  document.getElementById("test-run-selected-scenario-button").addEventListener("click", () => {
+    if (!testLabSelectedScenarioId) {
+      setActionStatus("Select a scenario before running a targeted test", "fail");
+      return;
+    }
+    runTestLabAction(
+      `Scenario ${testLabSelectedScenarioId}`,
+      ENDPOINTS.runScenarioById(testLabSelectedScenarioId),
+      "scenario",
+    );
+  });
+  document.getElementById("test-scenario-select").addEventListener("change", (event) => {
+    testLabSelectedScenarioId = event.target.value;
+    renderTestLabSelectedScenario();
+    setActionBusy(false);
   });
 }
 
@@ -200,15 +232,58 @@ function registerScenarioBuilder() {
   document.getElementById("new-scenario-button").addEventListener("click", () => {
     resetScenarioManagerForm();
   });
+  document.getElementById("select-all-scenarios-button").addEventListener("click", () => {
+    selectAllScenarios();
+  });
+  document.getElementById("clear-scenario-selection-button").addEventListener("click", () => {
+    clearScenarioSelection();
+  });
+  document.getElementById("duplicate-scenario-button").addEventListener("click", () => {
+    duplicateSelectedScenario();
+  });
   document.getElementById("delete-scenario-button").addEventListener("click", () => {
     deleteSelectedScenario();
   });
+  document.getElementById("run-selected-scenario-button").addEventListener("click", () => {
+    runSelectedScenario();
+  });
+  document.getElementById("scenario-library-list").addEventListener("change", (event) => {
+    const selector = closestFromEvent(event, "[data-scenario-selector]");
+    if (!selector) {
+      return;
+    }
+    toggleScenarioSelection(selector.dataset.scenarioSelector, selector.checked);
+  });
   document.getElementById("scenario-library-list").addEventListener("click", (event) => {
+    if (closestFromEvent(event, "[data-scenario-select-control]")) {
+      return;
+    }
+
     const item = closestFromEvent(event, "[data-scenario-id]");
     if (!item) {
       return;
     }
     loadScenarioForEdit(item.dataset.scenarioId);
+  });
+  document.getElementById("scenario-library-list").addEventListener("keydown", (event) => {
+    const item = closestFromEvent(event, "[data-scenario-id]");
+    if (!item) {
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      loadScenarioForEdit(item.dataset.scenarioId);
+    }
+    if (event.key === " ") {
+      event.preventDefault();
+      toggleScenarioSelection(item.dataset.scenarioId);
+    }
+  });
+  document.getElementById("scenario-builder-form").addEventListener("input", () => {
+    renderScenarioDraftAssist();
+  });
+  document.getElementById("scenario-builder-form").addEventListener("change", () => {
+    renderScenarioDraftAssist();
   });
 }
 
@@ -240,15 +315,20 @@ function registerHistoryDetails() {
   });
 }
 
-async function runDashboardAction(label, url) {
+async function runTestLabAction(label, url, resultType) {
   setActionBusy(true);
   setActionStatus(`${label} running`, "info");
+  renderTestLabResultLoading(label);
 
   try {
-    await postJson(url);
+    const report = await postJson(url);
+    latestTestLabResult = { label, report, resultType };
     await loadDashboard();
+    renderTestLabResult(label, report, resultType);
     setActionStatus(`${label} complete at ${new Date().toLocaleTimeString()}`, "pass");
   } catch (error) {
+    latestTestLabResult = null;
+    renderTestLabResultError(label, error);
     setActionStatus(`${label} failed: ${error.message}`, "fail");
   } finally {
     setActionBusy(false);
@@ -267,15 +347,14 @@ async function saveScenarioFromBuilder(runAfterSave) {
       : await postJson(ENDPOINTS.saveScenario, payload);
     selectedScenarioId = saved.scenario.id;
     selectedScenarioSnapshot = clonePlainObject({ ...payload, id: saved.scenario.id });
+    scenarioDraftBaseSnapshot = clonePlainObject(selectedScenarioSnapshot);
     await loadDashboard();
     setScenarioManagerMode("edit", saved.scenario.id);
+    renderScenarioDraftAssist();
     setBuilderStatus(`${editingScenarioId ? "Updated" : "Created"} ${saved.scenario.id}`, "pass");
 
     if (runAfterSave) {
-      setActionStatus("Scenario run running", "info");
-      await postJson(ENDPOINTS.runScenario);
-      await loadDashboard();
-      setActionStatus(`Scenario run complete at ${new Date().toLocaleTimeString()}`, "pass");
+      await runScenarioPreview(saved.scenario.id);
     }
   } catch (error) {
     setBuilderStatus(error.message, "fail");
@@ -292,6 +371,8 @@ async function loadScenarioForEdit(scenarioId) {
     const payload = await fetchJson(ENDPOINTS.scenarioDetail(scenarioId));
     selectedScenarioId = payload.scenario.id;
     selectedScenarioSnapshot = clonePlainObject(payload.scenario);
+    scenarioDraftBaseSnapshot = clonePlainObject(payload.scenario);
+    testLabSelectedScenarioId = payload.scenario.id;
     populateScenarioForm(payload.scenario);
     setScenarioManagerMode("edit", payload.scenario.id);
     renderScenarioLibrary({
@@ -299,6 +380,8 @@ async function loadScenarioForEdit(scenarioId) {
       count: scenarioLibraryRecords.length,
       available: true,
     });
+    renderScenarioPreviewEmpty();
+    renderScenarioDraftAssist();
     setBuilderStatus(`Editing ${payload.scenario.id}`, "pass");
   } catch (error) {
     setBuilderStatus(`Load failed: ${error.message}`, "fail");
@@ -307,25 +390,122 @@ async function loadScenarioForEdit(scenarioId) {
   }
 }
 
-async function deleteSelectedScenario() {
-  if (!selectedScenarioId) {
-    setBuilderStatus("Select a scenario to delete", "fail");
+async function runSelectedScenario() {
+  const scenarioIds = selectedScenarioOperationIds();
+  if (!scenarioIds.length) {
+    setBuilderStatus("Select one or more scenarios to run", "fail");
     return;
   }
 
-  const scenarioId = selectedScenarioId;
-  if (!window.confirm(`Delete scenario "${scenarioId}"?`)) {
+  if (scenarioIds.length === 1) {
+    await runScenarioPreview(scenarioIds[0]);
+    return;
+  }
+
+  await runScenarioBatchPreview(scenarioIds);
+}
+
+function duplicateSelectedScenario() {
+  if (!selectedScenarioSnapshot) {
+    setBuilderStatus("Select a scenario to duplicate", "fail");
+    return;
+  }
+
+  const source = clonePlainObject(selectedScenarioSnapshot);
+  const duplicateId = uniqueScenarioCopyId(source.id || "custom_scenario");
+  const duplicate = {
+    ...source,
+    id: duplicateId,
+    name: `${source.name || source.id || "Scenario"} Copy`,
+    tags: normalizeTagList(source.tags),
+  };
+
+  selectedScenarioId = null;
+  selectedScenarioSnapshot = clonePlainObject(source);
+  scenarioDraftBaseSnapshot = clonePlainObject(source);
+  latestScenarioPreview = null;
+  populateScenarioForm(duplicate);
+  setScenarioManagerMode("duplicate", source.id || null);
+  renderScenarioLibrary({
+    scenarios: scenarioLibraryRecords,
+    count: scenarioLibraryRecords.length,
+    available: true,
+  });
+  renderScenarioPreviewEmpty();
+  renderScenarioDraftAssist();
+  setBuilderStatus(`Duplicated ${source.id}; edit the draft and save`, "info");
+}
+
+async function runScenarioPreview(scenarioId) {
+  setActionBusy(true);
+  setBuilderStatus(`Running ${scenarioId}`, "info");
+  renderScenarioPreviewLoading(scenarioId);
+
+  try {
+    const report = await postJson(ENDPOINTS.runScenarioById(scenarioId));
+    latestScenarioPreview = report;
+    renderScenarioPreview(report);
+    setBuilderStatus(`Ran ${scenarioId}`, report.quality_gate_passed ? "pass" : "fail");
+    setActionStatus(`Scenario ${scenarioId} complete at ${new Date().toLocaleTimeString()}`, "pass");
+  } catch (error) {
+    latestScenarioPreview = null;
+    renderScenarioPreviewError(scenarioId, error);
+    setBuilderStatus(`Run failed: ${error.message}`, "fail");
+  } finally {
+    setActionBusy(false);
+  }
+}
+
+async function runScenarioBatchPreview(scenarioIds) {
+  setActionBusy(true);
+  setBuilderStatus(`Running ${scenarioIds.length} scenarios`, "info");
+  renderScenarioBatchPreviewLoading(scenarioIds);
+
+  try {
+    const reports = [];
+    for (const scenarioId of scenarioIds) {
+      reports.push(await postJson(ENDPOINTS.runScenarioById(scenarioId)));
+    }
+    latestScenarioPreview = { reports };
+    renderScenarioBatchPreview(reports);
+    await loadDashboard();
+    setBuilderStatus(`Ran ${scenarioIds.length} scenarios`, reports.every((report) => report.quality_gate_passed) ? "pass" : "fail");
+    setActionStatus(`${scenarioIds.length} scenarios complete at ${new Date().toLocaleTimeString()}`, "pass");
+  } catch (error) {
+    latestScenarioPreview = null;
+    renderScenarioPreviewError("batch", error);
+    setBuilderStatus(`Batch run failed: ${error.message}`, "fail");
+  } finally {
+    setActionBusy(false);
+  }
+}
+
+async function deleteSelectedScenario() {
+  const scenarioIds = selectedScenarioOperationIds();
+  if (!scenarioIds.length) {
+    setBuilderStatus("Select one or more scenarios to delete", "fail");
+    return;
+  }
+
+  const label = scenarioIds.length === 1 ? `"${scenarioIds[0]}"` : `${scenarioIds.length} scenarios`;
+  if (!window.confirm(`Delete ${label}?`)) {
     return;
   }
 
   setActionBusy(true);
-  setBuilderStatus(`Deleting ${scenarioId}`, "info");
+  setBuilderStatus(`Deleting ${label}`, "info");
 
   try {
-    await requestJson("DELETE", ENDPOINTS.scenarioDetail(scenarioId));
-    resetScenarioManagerForm();
+    for (const scenarioId of scenarioIds) {
+      await requestJson("DELETE", ENDPOINTS.scenarioDetail(scenarioId));
+    }
+    if (scenarioIds.includes(selectedScenarioId)) {
+      resetScenarioManagerForm();
+    }
+    selectedScenarioIds = new Set([...selectedScenarioIds].filter((scenarioId) => !scenarioIds.includes(scenarioId)));
+    renderScenarioPreviewEmpty();
     await loadDashboard();
-    setBuilderStatus(`Deleted ${scenarioId}`, "pass");
+    setBuilderStatus(`Deleted ${label}`, "pass");
   } catch (error) {
     setBuilderStatus(`Delete failed: ${error.message}`, "fail");
   } finally {
@@ -447,6 +627,8 @@ function buildScenarioPayload() {
 function resetScenarioManagerForm() {
   selectedScenarioId = null;
   selectedScenarioSnapshot = null;
+  scenarioDraftBaseSnapshot = null;
+  latestScenarioPreview = null;
   populateScenarioForm(DEFAULT_SCENARIO_FORM);
   setScenarioManagerMode("create");
   renderScenarioLibrary({
@@ -454,6 +636,8 @@ function resetScenarioManagerForm() {
     count: scenarioLibraryRecords.length,
     available: true,
   });
+  renderScenarioPreviewEmpty();
+  renderScenarioDraftAssist();
   setBuilderStatus("Create a new scenario or select one to edit", "");
 }
 
@@ -499,11 +683,317 @@ function populateScenarioForm(scenario) {
   setCheckedValue("builder-corridor-occupied", Boolean(fleetContext.corridor_occupied));
 }
 
+function renderScenarioDraftAssist() {
+  const draft = buildScenarioPayload();
+  renderScenarioValidation(draft);
+  renderScenarioDiff(draft);
+}
+
+function renderScenarioValidation(draft) {
+  const findings = scenarioValidationFindings(draft);
+  const errors = findings.filter((finding) => finding.kind === "fail");
+  const warnings = findings.filter((finding) => finding.kind === "warn");
+  const chipKind = errors.length ? "fail" : warnings.length ? "warn" : "pass";
+  const chipText = errors.length ? `${errors.length} ERRORS` : warnings.length ? `${warnings.length} WARNINGS` : "READY";
+  const container = document.getElementById("scenario-validation-list");
+
+  setPill("scenario-validation-chip", chipText, chipKind);
+  container.innerHTML = findings.length
+    ? findings
+      .map(
+        (finding) => `
+          <div class="assist-row ${finding.kind}">
+            <strong>${escapeHtml(finding.title)}</strong>
+            <span>${escapeHtml(finding.detail)}</span>
+          </div>
+        `,
+      )
+      .join("")
+    : `<div class="assist-row pass"><strong>Ready to save</strong><span>Required fields and expected checks look consistent.</span></div>`;
+}
+
+function scenarioValidationFindings(draft) {
+  const findings = [];
+  const expected = draft.expected || {};
+  const observation = draft.observation || {};
+
+  if (!draft.id) {
+    findings.push({ kind: "fail", title: "Missing id", detail: "Scenario id is required." });
+  }
+  if (!draft.name) {
+    findings.push({ kind: "fail", title: "Missing name", detail: "Scenario name is required." });
+  }
+  if (!expected.final_move) {
+    findings.push({ kind: "fail", title: "Missing final move", detail: "expected.final_move is required." });
+  }
+  if (!Array.isArray(observation.position) || observation.position.length !== 2) {
+    findings.push({ kind: "fail", title: "Invalid position", detail: "observation.position must contain two coordinates." });
+  }
+  if (!Array.isArray(observation.target) || observation.target.length !== 2) {
+    findings.push({ kind: "fail", title: "Invalid target", detail: "observation.target must contain two coordinates." });
+  }
+  if (expected.seom_passed === false && !expected.expected_violations?.length) {
+    findings.push({
+      kind: "warn",
+      title: "Blocked SEOM without violations",
+      detail: "Add expected violations when SEOM is expected to block.",
+    });
+  }
+  if (expected.expected_violations?.length && expected.required_absent_violations?.length) {
+    findings.push({
+      kind: "warn",
+      title: "Conflicting violation expectations",
+      detail: "Use either expected violations or required absent violations for this form.",
+    });
+  }
+  if (observation.nearest_human_distance_m < 0.3 && expected.final_move !== "hold") {
+    findings.push({
+      kind: "warn",
+      title: "Human proximity risk",
+      detail: "A human distance below 0.3 m usually expects a hold action.",
+    });
+  }
+  if (observation.battery_pct < 15 && !["hold", "return_to_dock"].includes(expected.final_move)) {
+    findings.push({
+      kind: "warn",
+      title: "Low battery action",
+      detail: "Low battery scenarios usually hold or return to dock.",
+    });
+  }
+  if (!draft.tags?.length) {
+    findings.push({ kind: "warn", title: "No tags", detail: "Tags make scenario filtering and review easier." });
+  }
+  return findings;
+}
+
+function renderScenarioDiff(draft) {
+  const container = document.getElementById("scenario-diff-list");
+  if (!scenarioDraftBaseSnapshot) {
+    setPill("scenario-diff-chip", "NEW", "neutral");
+    container.innerHTML = `<div class="notice">This is a new scenario draft.</div>`;
+    return;
+  }
+
+  const changes = scenarioDiffRows(scenarioComparable(scenarioDraftBaseSnapshot), scenarioComparable(draft));
+  setPill("scenario-diff-chip", changes.length ? `${changes.length} CHANGES` : "CLEAN", changes.length ? "info" : "pass");
+
+  if (!changes.length) {
+    container.innerHTML = `<div class="assist-row pass"><strong>No changes</strong><span>The draft matches the loaded scenario.</span></div>`;
+    return;
+  }
+
+  container.innerHTML = changes
+    .slice(0, 24)
+    .map(
+      (change) => `
+        <div class="diff-row">
+          <strong>${escapeHtml(change.path)}</strong>
+          <div class="diff-values">
+            <code>${escapeHtml(formatDetailValue(change.before))}</code>
+            <code>${escapeHtml(formatDetailValue(change.after))}</code>
+          </div>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function scenarioComparable(scenario) {
+  return {
+    id: scenario.id,
+    name: scenario.name,
+    description: scenario.description,
+    tags: scenario.tags || [],
+    observation: scenario.observation || {},
+    expected: scenario.expected || {},
+  };
+}
+
+function scenarioDiffRows(before, after) {
+  const beforeFlat = flattenObject(before);
+  const afterFlat = flattenObject(after);
+  const keys = [...new Set([...Object.keys(beforeFlat), ...Object.keys(afterFlat)])].sort();
+  return keys
+    .filter((key) => stableStringify(beforeFlat[key]) !== stableStringify(afterFlat[key]))
+    .map((key) => ({ path: key, before: beforeFlat[key], after: afterFlat[key] }));
+}
+
+function flattenObject(value, prefix = "") {
+  if (Array.isArray(value) || value === null || typeof value !== "object") {
+    return prefix ? { [prefix]: value } : {};
+  }
+
+  return Object.entries(value).reduce((accumulator, [key, item]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (item !== null && typeof item === "object" && !Array.isArray(item)) {
+      return { ...accumulator, ...flattenObject(item, path) };
+    }
+    accumulator[path] = item;
+    return accumulator;
+  }, {});
+}
+
+function uniqueScenarioCopyId(sourceId) {
+  const base = `${sourceId}_copy`;
+  const existingIds = new Set(scenarioLibraryRecords.map((scenario) => scenario.id));
+  if (!existingIds.has(base)) {
+    return base;
+  }
+  let index = 2;
+  while (existingIds.has(`${base}_${index}`)) {
+    index += 1;
+  }
+  return `${base}_${index}`;
+}
+
+function normalizeTagList(tags) {
+  const normalized = Array.isArray(tags) ? [...tags] : [];
+  if (!normalized.includes("custom")) {
+    normalized.unshift("custom");
+  }
+  if (!normalized.includes("duplicate")) {
+    normalized.push("duplicate");
+  }
+  return normalized;
+}
+
 function setScenarioManagerMode(mode, scenarioId = null) {
   const isEdit = mode === "edit";
-  setPill("scenario-manager-mode-chip", isEdit ? "EDIT" : "CREATE", isEdit ? "info" : "neutral");
-  setText("scenario-manager-title", isEdit ? `Editing ${scenarioId}` : "New Scenario");
-  document.getElementById("delete-scenario-button").disabled = !isEdit;
+  const isDuplicate = mode === "duplicate";
+  const label = isEdit ? "EDIT" : isDuplicate ? "DUPLICATE" : "CREATE";
+  const kind = isEdit || isDuplicate ? "info" : "neutral";
+  setPill("scenario-manager-mode-chip", label, kind);
+  setText(
+    "scenario-manager-title",
+    isEdit ? `Editing ${scenarioId}` : isDuplicate ? `Duplicating ${scenarioId}` : "New Scenario",
+  );
+  document.getElementById("duplicate-scenario-button").disabled = !selectedScenarioSnapshot;
+  updateScenarioSelectionControls();
+}
+
+function renderScenarioPreview(report) {
+  const scenario = report.scenario || {};
+  const actual = scenario.actual || {};
+  const checks = scenario.checks || [];
+  const latency = report.summary?.module_latency_ms || {};
+  const resultKind = report.quality_gate_passed ? "pass" : "fail";
+
+  setText("scenario-preview-title", scenario.id ? `Run ${scenario.id}` : "Scenario Run");
+  setPill("scenario-preview-chip", report.quality_gate_passed ? "PASS" : "FAIL", resultKind);
+
+  document.getElementById("scenario-preview-body").innerHTML = `
+    <div class="detail-stat-grid compact">
+      ${renderDetailStat("Move", actual.final_move || "--")}
+      ${renderDetailStat("STUM", actual.stum_gate || "--")}
+      ${renderDetailStat("Route", actual.route_strategy || "--")}
+      ${renderDetailStat("SEOM", actual.seom_passed ? "pass" : "block")}
+      ${renderDetailStat("Fleet", actual.fleet_adjustment || "--")}
+      ${renderDetailStat("Violations", String((actual.violations || []).length))}
+      ${renderDetailStat("Checks", `${checks.filter((check) => check.passed).length}/${checks.length}`)}
+      ${renderDetailStat("Generated", formatTimestamp(report.generated_at))}
+    </div>
+    ${renderDetailLatency(latency)}
+    ${renderScenarioPreviewChecks(checks)}
+    <details class="raw-snapshot">
+      <summary>Run JSON</summary>
+      <pre>${escapeHtml(JSON.stringify(report, null, 2))}</pre>
+    </details>
+  `;
+}
+
+function renderScenarioBatchPreview(reports) {
+  const scenarios = reports.map((report) => report.scenario).filter(Boolean);
+  const passed = reports.filter((report) => report.quality_gate_passed).length;
+  const failed = reports.length - passed;
+  const maxP95 = Math.max(
+    0,
+    ...reports.map((report) => maxModuleP95(report.summary?.module_latency_ms || {})),
+  );
+
+  setText("scenario-preview-title", `Batch Run: ${reports.length} scenarios`);
+  setPill("scenario-preview-chip", failed ? "FAIL" : "PASS", failed ? "fail" : "pass");
+  document.getElementById("scenario-preview-body").innerHTML = `
+    <div class="detail-stat-grid compact">
+      ${renderDetailStat("Scenarios", String(reports.length))}
+      ${renderDetailStat("Passed", String(passed))}
+      ${renderDetailStat("Failed", String(failed))}
+      ${renderDetailStat("Max P95", `${formatNumber(maxP95)} ms`)}
+      ${renderDetailStat("History Records", String(reports.filter((report) => report.history_record).length))}
+      ${renderDetailStat("Generated", reports.at(-1)?.generated_at ? formatTimestamp(reports.at(-1).generated_at) : "--")}
+    </div>
+    ${renderTestLabScenarioRows(scenarios)}
+    <details class="raw-snapshot">
+      <summary>Batch JSON</summary>
+      <pre>${escapeHtml(JSON.stringify(reports, null, 2))}</pre>
+    </details>
+  `;
+}
+
+function renderScenarioPreviewChecks(checks) {
+  if (!checks.length) {
+    return `<div class="notice">No expected checks in scenario</div>`;
+  }
+
+  return `
+    <div class="detail-table-wrap">
+      <table class="detail-table check-detail-table">
+        <thead>
+          <tr>
+            <th>Check</th>
+            <th>Result</th>
+            <th>Expected</th>
+            <th>Actual</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${checks
+            .map(
+              (check) => `
+                <tr>
+                  <td>${escapeHtml(check.name || "--")}</td>
+                  <td>
+                    <span class="status-pill ${check.passed ? "pass" : "fail"}">
+                      ${check.passed ? "PASS" : "FAIL"}
+                    </span>
+                  </td>
+                  <td><code>${escapeHtml(formatDetailValue(check.expected))}</code></td>
+                  <td><code>${escapeHtml(formatDetailValue(check.actual))}</code></td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderScenarioPreviewLoading(scenarioId) {
+  setText("scenario-preview-title", `Running ${scenarioId}`);
+  setPill("scenario-preview-chip", "RUNNING", "info");
+  document.getElementById("scenario-preview-body").innerHTML =
+    `<div class="notice">Running selected scenario</div>`;
+}
+
+function renderScenarioBatchPreviewLoading(scenarioIds) {
+  setText("scenario-preview-title", `Running ${scenarioIds.length} scenarios`);
+  setPill("scenario-preview-chip", "RUNNING", "info");
+  document.getElementById("scenario-preview-body").innerHTML =
+    `<div class="notice">Running ${escapeHtml(scenarioIds.join(", "))}</div>`;
+}
+
+function renderScenarioPreviewError(scenarioId, error) {
+  setText("scenario-preview-title", `Run ${scenarioId}`);
+  setPill("scenario-preview-chip", "ERROR", "fail");
+  document.getElementById("scenario-preview-body").innerHTML =
+    `<div class="notice">${escapeHtml(error.message)}</div>`;
+}
+
+function renderScenarioPreviewEmpty() {
+  setText("scenario-preview-title", "No Run Selected");
+  setPill("scenario-preview-chip", "IDLE", "neutral");
+  document.getElementById("scenario-preview-body").innerHTML =
+    `<div class="notice">Select a scenario and run it to preview actual signals and checks.</div>`;
 }
 
 async function refreshArtifacts() {
@@ -525,7 +1015,10 @@ function setActionBusy(isBusy) {
     document.getElementById(id).disabled = isBusy;
   });
   if (!isBusy) {
-    document.getElementById("delete-scenario-button").disabled = !selectedScenarioId;
+    updateScenarioSelectionControls();
+    document.getElementById("duplicate-scenario-button").disabled = !selectedScenarioSnapshot;
+    document.getElementById("test-run-selected-scenario-button").disabled =
+      !scenarioLibraryRecords.some((scenario) => scenario.id === testLabSelectedScenarioId);
   }
 }
 
@@ -555,6 +1048,7 @@ function renderDashboard(
   renderSummary(scenarioPayload, benchmarkPayload, eventPayload, auditPayload);
   renderVisualOverview(scenarioReport, historyPayload);
   renderScenarioLibrary(scenariosPayload);
+  renderTestLab(scenarioReport, benchmarkReport, scenariosPayload);
   renderScenarioTable(scenarioReport);
   renderLatency(benchmarkReport, scenarioReport);
   renderViolations(scenarioReport);
@@ -787,6 +1281,8 @@ function renderScenarioTable(report) {
 function renderScenarioLibrary(payload) {
   const scenarios = payload?.scenarios || [];
   scenarioLibraryRecords = scenarios;
+  const availableIds = new Set(scenarios.map((scenario) => scenario.id));
+  selectedScenarioIds = new Set([...selectedScenarioIds].filter((scenarioId) => availableIds.has(scenarioId)));
   if (selectedScenarioId && !scenarios.some((scenario) => scenario.id === selectedScenarioId)) {
     selectedScenarioId = null;
     selectedScenarioSnapshot = null;
@@ -794,6 +1290,7 @@ function renderScenarioLibrary(payload) {
   }
   const container = document.getElementById("scenario-library-list");
   setPill("scenario-library-chip", `${payload?.count || 0} YAML`, payload?.available ? "info" : "warn");
+  updateScenarioSelectionControls();
 
   if (!scenarios.length) {
     container.innerHTML = `<div class="notice">No scenario YAML files</div>`;
@@ -803,21 +1300,323 @@ function renderScenarioLibrary(payload) {
   container.innerHTML = scenarios
     .map((scenario) => {
       const selectedClass = scenario.id === selectedScenarioId ? "selected" : "";
+      const multiSelected = selectedScenarioIds.has(scenario.id);
+      const multiSelectedClass = multiSelected ? "multi-selected" : "";
       return `
-        <button
-          class="scenario-item ${selectedClass}"
-          type="button"
+        <div
+          class="scenario-item ${selectedClass} ${multiSelectedClass}"
           data-scenario-id="${escapeHtml(scenario.id)}"
+          role="button"
+          tabindex="0"
+          aria-pressed="${selectedClass ? "true" : "false"}"
         >
-          <span>
+          <label class="scenario-select-control" data-scenario-select-control>
+            <input
+              type="checkbox"
+              data-scenario-selector="${escapeHtml(scenario.id)}"
+              ${multiSelected ? "checked" : ""}
+              aria-label="Select ${escapeHtml(scenario.name || scenario.id)}"
+            />
+            <span>Select</span>
+          </label>
+          <div class="scenario-item-copy">
             <strong>${escapeHtml(scenario.name || scenario.id)}</strong>
             <small>${escapeHtml(scenario.id)}</small>
-          </span>
+          </div>
           ${renderTags(scenario.tags)}
-        </button>
+        </div>
       `;
     })
     .join("");
+  syncScenarioSelectionClasses();
+}
+
+function toggleScenarioSelection(scenarioId, checked = null) {
+  if (!scenarioId) {
+    return;
+  }
+
+  const shouldSelect = checked === null ? !selectedScenarioIds.has(scenarioId) : Boolean(checked);
+  if (shouldSelect) {
+    selectedScenarioIds.add(scenarioId);
+  } else {
+    selectedScenarioIds.delete(scenarioId);
+  }
+  syncScenarioSelectionClasses();
+  updateScenarioSelectionControls();
+}
+
+function selectAllScenarios() {
+  selectedScenarioIds = new Set(scenarioLibraryRecords.map((scenario) => scenario.id));
+  syncScenarioSelectionClasses();
+  updateScenarioSelectionControls();
+  setBuilderStatus(`Selected ${selectedScenarioIds.size} scenarios`, "info");
+}
+
+function clearScenarioSelection() {
+  selectedScenarioIds.clear();
+  syncScenarioSelectionClasses();
+  updateScenarioSelectionControls();
+  setBuilderStatus("Scenario selection cleared", "");
+}
+
+function selectedScenarioOperationIds() {
+  if (selectedScenarioIds.size) {
+    return [...selectedScenarioIds];
+  }
+  return selectedScenarioId ? [selectedScenarioId] : [];
+}
+
+function updateScenarioSelectionControls() {
+  const selectedCount = selectedScenarioIds.size;
+  const operationCount = selectedScenarioOperationIds().length;
+  setPill(
+    "scenario-selection-chip",
+    selectedCount ? `${selectedCount} SELECTED` : "0 SELECTED",
+    selectedCount ? "info" : "neutral",
+  );
+  document.getElementById("clear-scenario-selection-button").disabled = selectedCount === 0;
+  document.getElementById("select-all-scenarios-button").disabled =
+    !scenarioLibraryRecords.length || selectedCount === scenarioLibraryRecords.length;
+  document.getElementById("run-selected-scenario-button").disabled = operationCount === 0;
+  document.getElementById("delete-scenario-button").disabled = operationCount === 0;
+  document.getElementById("run-selected-scenario-button").textContent =
+    selectedCount > 1 ? `Run ${selectedCount} Selected` : "Run Selected";
+  document.getElementById("delete-scenario-button").textContent =
+    selectedCount > 1 ? `Delete ${selectedCount} Selected` : selectedCount === 1 ? "Delete Selected" : "Delete Scenario";
+}
+
+function syncScenarioSelectionClasses() {
+  document.querySelectorAll("[data-scenario-id]").forEach((item) => {
+    const scenarioId = item.dataset.scenarioId;
+    const isMultiSelected = selectedScenarioIds.has(scenarioId);
+    item.classList.toggle("multi-selected", isMultiSelected);
+    const checkbox = item.querySelector("[data-scenario-selector]");
+    if (checkbox) {
+      checkbox.checked = isMultiSelected;
+    }
+  });
+}
+
+function renderTestLab(scenarioReport, benchmarkReport, scenariosPayload) {
+  setPill("test-lab-chip", latestTestLabResult ? "RESULT READY" : "READY", latestTestLabResult ? "info" : "neutral");
+  renderTestLabSuiteSummary(scenarioReport);
+  renderTestLabBenchmarkSummary(benchmarkReport);
+  renderTestLabScenarioSelector(scenariosPayload?.scenarios || []);
+  if (latestTestLabResult) {
+    renderTestLabResult(
+      latestTestLabResult.label,
+      latestTestLabResult.report,
+      latestTestLabResult.resultType,
+    );
+  }
+}
+
+function renderTestLabSuiteSummary(report) {
+  const container = document.getElementById("test-suite-summary");
+  if (!report) {
+    setPill("test-suite-chip", "NO DATA", "warn");
+    container.innerHTML = `<div class="notice">No scenario suite report yet</div>`;
+    return;
+  }
+
+  setPill("test-suite-chip", `${report.passed || 0}/${report.total || 0} PASS`, report.quality_gate_passed ? "pass" : "fail");
+  container.innerHTML = `
+    <div class="detail-stat-grid compact">
+      ${renderDetailStat("Cases", String(report.total || 0))}
+      ${renderDetailStat("Pass Rate", formatPercent(report.pass_rate))}
+      ${renderDetailStat("Failed", String(report.failed || 0))}
+      ${renderDetailStat("Generated", formatTimestamp(report.generated_at))}
+    </div>
+  `;
+}
+
+function renderTestLabBenchmarkSummary(report) {
+  const container = document.getElementById("test-benchmark-summary");
+  if (!report) {
+    setPill("test-benchmark-chip", "NO DATA", "warn");
+    container.innerHTML = `<div class="notice">No benchmark report yet</div>`;
+    return;
+  }
+
+  const maxP95 = maxModuleP95(report.module_latency_ms || {});
+  setPill("test-benchmark-chip", report.quality_gate_passed ? "PASS" : "FAIL", report.quality_gate_passed ? "pass" : "fail");
+  container.innerHTML = `
+    <div class="detail-stat-grid compact">
+      ${renderDetailStat("Steps", String(report.steps || 0))}
+      ${renderDetailStat("Max P95", `${formatNumber(maxP95)} ms`)}
+      ${renderDetailStat("Threshold", `${formatNumber(report.thresholds?.max_module_p95_ms)} ms`)}
+      ${renderDetailStat("Audit", report.audit_valid ? "valid" : "invalid")}
+    </div>
+  `;
+}
+
+function renderTestLabScenarioSelector(scenarios) {
+  const select = document.getElementById("test-scenario-select");
+  if (!scenarios.length) {
+    testLabSelectedScenarioId = null;
+    select.innerHTML = `<option value="">No scenarios available</option>`;
+    setPill("test-single-chip", "NO YAML", "warn");
+    renderTestLabSelectedScenario();
+    return;
+  }
+
+  const preferredId = testLabSelectedScenarioId || selectedScenarioId || select.value || scenarios[0].id;
+  testLabSelectedScenarioId = scenarios.some((scenario) => scenario.id === preferredId)
+    ? preferredId
+    : scenarios[0].id;
+  select.innerHTML = scenarios
+    .map(
+      (scenario) => `
+        <option value="${escapeHtml(scenario.id)}">${escapeHtml(scenario.name || scenario.id)}</option>
+      `,
+    )
+    .join("");
+  select.value = testLabSelectedScenarioId;
+  setPill("test-single-chip", "READY", "info");
+  renderTestLabSelectedScenario();
+}
+
+function renderTestLabSelectedScenario() {
+  const scenario = scenarioLibraryRecords.find((item) => item.id === testLabSelectedScenarioId);
+  const container = document.getElementById("test-selected-scenario-meta");
+  document.getElementById("test-run-selected-scenario-button").disabled = !scenario;
+
+  if (!scenario) {
+    container.innerHTML = `<div class="notice">Select a scenario to run a targeted test.</div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="test-selected-scenario-card">
+      <strong>${escapeHtml(scenario.name || scenario.id)}</strong>
+      <span>${escapeHtml(scenario.id)}</span>
+      ${renderTags(scenario.tags)}
+    </div>
+  `;
+}
+
+function renderTestLabResultLoading(label) {
+  setText("test-lab-result-title", label);
+  setPill("test-lab-result-chip", "RUNNING", "info");
+  setPill("test-lab-chip", "RUNNING", "info");
+  document.getElementById("test-lab-result-body").innerHTML =
+    `<div class="notice">${escapeHtml(label)} is running</div>`;
+}
+
+function renderTestLabResultError(label, error) {
+  setText("test-lab-result-title", label);
+  setPill("test-lab-result-chip", "ERROR", "fail");
+  setPill("test-lab-chip", "ERROR", "fail");
+  document.getElementById("test-lab-result-body").innerHTML =
+    `<div class="notice">${escapeHtml(error.message)}</div>`;
+}
+
+function renderTestLabResult(label, report, resultType) {
+  const passed = report?.quality_gate_passed === true;
+  const failed = report?.quality_gate_passed === false;
+  const chipKind = passed ? "pass" : failed ? "fail" : "neutral";
+  const chipText = passed ? "PASS" : failed ? "FAIL" : "UNKNOWN";
+
+  setText("test-lab-result-title", label);
+  setPill("test-lab-result-chip", chipText, chipKind);
+  setPill("test-lab-chip", chipText, chipKind);
+  document.getElementById("test-lab-result-body").innerHTML =
+    resultType === "benchmark"
+      ? renderTestLabBenchmarkResult(report)
+      : renderTestLabScenarioResult(report);
+}
+
+function renderTestLabScenarioResult(report) {
+  const scenarios = report.scenarios || (report.scenario ? [report.scenario] : []);
+  const latency = report.summary?.module_latency_ms || {};
+  const maxP95 = maxModuleP95(latency);
+  const historyId = report.history_record?.id || "--";
+
+  return `
+    <div class="detail-stat-grid compact">
+      ${renderDetailStat("Cases", String(report.total || scenarios.length || 0))}
+      ${renderDetailStat("Passed", String(report.passed || 0))}
+      ${renderDetailStat("Failed", String(report.failed || 0))}
+      ${renderDetailStat("Max P95", `${formatNumber(maxP95)} ms`)}
+      ${renderDetailStat("Pass Rate", formatPercent(report.pass_rate))}
+      ${renderDetailStat("Generated", formatTimestamp(report.generated_at))}
+      ${renderDetailStat("History", shortHash(historyId))}
+      ${renderDetailStat("Suite", report.suite || "carry_go")}
+    </div>
+    ${renderTestLabScenarioRows(scenarios)}
+    ${renderDetailLatency(latency)}
+  `;
+}
+
+function renderTestLabBenchmarkResult(report) {
+  const latency = report.module_latency_ms || {};
+  const maxP95 = maxModuleP95(latency);
+  const historyId = report.history_record?.id || "--";
+
+  return `
+    <div class="detail-stat-grid compact">
+      ${renderDetailStat("Steps", String(report.steps || 0))}
+      ${renderDetailStat("Max P95", `${formatNumber(maxP95)} ms`)}
+      ${renderDetailStat("Threshold", `${formatNumber(report.thresholds?.max_module_p95_ms)} ms`)}
+      ${renderDetailStat("Audit", report.audit_valid ? "valid" : "invalid")}
+      ${renderDetailStat("Gate", report.quality_gate_passed ? "pass" : "fail")}
+      ${renderDetailStat("Generated", formatTimestamp(report.generated_at))}
+      ${renderDetailStat("History", shortHash(historyId))}
+      ${renderDetailStat("Runner", "latency")}
+    </div>
+    ${renderDetailLatency(latency)}
+  `;
+}
+
+function renderTestLabScenarioRows(scenarios) {
+  if (!scenarios.length) {
+    return `<div class="notice">No scenario rows returned</div>`;
+  }
+
+  return `
+    <div class="detail-table-wrap">
+      <table class="detail-table">
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Result</th>
+            <th>Move</th>
+            <th>STUM</th>
+            <th>Route</th>
+            <th>Violations</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${scenarios
+            .slice(0, 12)
+            .map((scenario) => {
+              const actual = scenario.actual || {};
+              return `
+                <tr>
+                  <td>
+                    <div class="history-run">
+                      <strong>${escapeHtml(scenario.name || scenario.id)}</strong>
+                      <span>${escapeHtml(scenario.id || "--")}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-pill ${scenario.passed ? "pass" : "fail"}">
+                      ${scenario.passed ? "PASS" : "FAIL"}
+                    </span>
+                  </td>
+                  <td>${escapeHtml(actual.final_move || "--")}</td>
+                  <td>${escapeHtml(actual.stum_gate || "--")}</td>
+                  <td>${escapeHtml(actual.route_strategy || "--")}</td>
+                  <td>${renderViolationTokens(actual.violations || [])}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function renderLatency(benchmarkReport, scenarioReport) {
@@ -1398,6 +2197,13 @@ function totalCount(counts) {
   return Object.values(counts || {}).reduce((total, value) => total + Number(value || 0), 0);
 }
 
+function maxModuleP95(metrics) {
+  return Math.max(
+    0,
+    ...Object.values(metrics || {}).map((item) => numberOrZero(item?.p95)),
+  );
+}
+
 function gateText(value, available) {
   if (!available) {
     return "MISSING";
@@ -1512,6 +2318,28 @@ function formatDetailValue(value) {
     return String(value);
   }
   return JSON.stringify(value);
+}
+
+function stableStringify(value) {
+  return JSON.stringify(stableNormalize(value));
+}
+
+function stableNormalize(value) {
+  if (value === undefined) {
+    return "__undefined__";
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => stableNormalize(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.keys(value)
+      .sort()
+      .reduce((accumulator, key) => {
+        accumulator[key] = stableNormalize(value[key]);
+        return accumulator;
+      }, {});
+  }
+  return value;
 }
 
 function shortHash(value) {

@@ -5,6 +5,7 @@ English: Carry & Go scenario runner that loads YAML cases, runs the pipeline, ch
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,6 +50,35 @@ def run_default_scenario_suite() -> dict[str, Any]:
         DEFAULT_REPORT_PATH,
         artifact_root=DEFAULT_ARTIFACT_ROOT,
     )
+
+
+def run_scenario_case(
+    scenario_id: str,
+    scenario_dir: Path | str = DEFAULT_SCENARIO_DIR,
+) -> dict[str, Any]:
+    """Run one scenario YAML file and return a compact single-case report."""
+    scenario_path = _scenario_case_path(scenario_id, scenario_dir)
+    if not scenario_path.exists():
+        raise ValueError(f"Scenario not found: {scenario_path}")
+
+    result = _run_case(_load_scenario(scenario_path))
+    report = _build_report([result])
+    report["scenario"] = _report_scenario(result)
+    return report
+
+
+def _scenario_case_path(scenario_id: str, scenario_dir: Path | str) -> Path:
+    safe_id = _safe_scenario_id(str(scenario_id))
+    if not safe_id:
+        raise ValueError("Scenario id is required")
+    return Path(scenario_dir) / f"{safe_id}.yaml"
+
+
+def _safe_scenario_id(raw_id: str) -> str:
+    lowered = raw_id.lower().strip().replace(" ", "_")
+    cleaned = re.sub(r"[^a-z0-9_-]+", "_", lowered)
+    cleaned = re.sub(r"_+", "_", cleaned).strip("_-")
+    return cleaned
 
 
 def _load_scenario(path: Path) -> dict[str, Any]:

@@ -19,6 +19,7 @@ from origami.api.app import (
     scenario_audit,
     scenario_events,
     scenario_run,
+    scenario_run_one,
     scenario_update,
     scenario_report,
 )
@@ -37,6 +38,7 @@ def test_dashboard_routes_are_registered() -> None:
     assert "/api/scenarios" in route_paths
     assert "/api/scenarios/{scenario_id}" in route_paths
     assert "/runs/scenario" in route_paths
+    assert "/runs/scenario/{scenario_id}" in route_paths
     assert "/runs/benchmark" in route_paths
 
 
@@ -48,8 +50,16 @@ def test_dashboard_page_file_is_served() -> None:
     assert "Origami Artifact Dashboard" in dashboard_path.read_text()
     assert 'data-tab-target="dashboard"' in dashboard_path.read_text()
     assert 'data-tab-target="scenario-builder"' in dashboard_path.read_text()
+    assert 'data-tab-target="test-lab"' in dashboard_path.read_text()
     assert 'data-tab-target="run-history"' in dashboard_path.read_text()
     assert "Scenario Manager" in dashboard_path.read_text()
+    assert "Test Lab" in dashboard_path.read_text()
+    assert "Run Scenarios and Benchmarks" in dashboard_path.read_text()
+    assert "Duplicate" in dashboard_path.read_text()
+    assert "Select All" in dashboard_path.read_text()
+    assert "Clear Selection" in dashboard_path.read_text()
+    assert "Validation Preview" in dashboard_path.read_text()
+    assert "Diff Preview" in dashboard_path.read_text()
     assert "Advanced Options" in dashboard_path.read_text()
     assert "Outcome Split" in dashboard_path.read_text()
     assert "Max P95 Trend" in dashboard_path.read_text()
@@ -76,14 +86,19 @@ def test_dashboard_jsonl_endpoints_return_record_payloads() -> None:
 
 def test_dashboard_run_actions_write_reports() -> None:
     scenario_payload = scenario_run()
+    single_payload = scenario_run_one("normal_delivery")
     benchmark_payload = benchmark_run()
     expected_scenario_count = len(list(Path("configs/scenarios").glob("*.yaml")))
 
     assert scenario_payload["quality_gate_passed"] is True
     assert scenario_payload["total"] == expected_scenario_count
+    assert single_payload["quality_gate_passed"] is True
+    assert single_payload["total"] == 1
+    assert single_payload["scenario"]["id"] == "normal_delivery"
     assert benchmark_payload["quality_gate_passed"] is True
     assert benchmark_payload["audit_valid"] is True
     assert "history_record" in scenario_payload
+    assert "history_record" in single_payload
     assert "history_record" in benchmark_payload
 
 

@@ -8,7 +8,7 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Origami Artifact Dashboard</title>
-    <link rel="stylesheet" href="/dashboard/static/dashboard.css?v=scenario-manager-v2" />
+    <link rel="stylesheet" href="/dashboard/static/dashboard.css?v=scenario-multi-select-v1" />
   </head>
   <body>
     <div class="app-shell">
@@ -18,12 +18,6 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
           <h1>Artifact Dashboard</h1>
         </div>
         <div class="topbar-actions">
-          <button id="run-scenario-button" class="action-button primary" type="button">
-            Run Scenario
-          </button>
-          <button id="run-benchmark-button" class="action-button" type="button">
-            Run Benchmark
-          </button>
           <button id="refresh-button" class="action-button" type="button">
             Refresh
           </button>
@@ -53,6 +47,15 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
           aria-pressed="false"
         >
           Scenario Manager
+        </button>
+        <button
+          id="tab-test-lab"
+          class="tab-button"
+          type="button"
+          data-tab-target="test-lab"
+          aria-pressed="false"
+        >
+          Test Lab
         </button>
         <button
           id="tab-run-history"
@@ -142,8 +145,21 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
                 <h2 id="scenario-manager-title">New Scenario</h2>
               </div>
               <div class="manager-toolbar-actions">
+                <span id="scenario-selection-chip" class="status-pill neutral">0 SELECTED</span>
+                <button id="select-all-scenarios-button" class="action-button" type="button">
+                  Select All
+                </button>
+                <button id="clear-scenario-selection-button" class="action-button" type="button" disabled>
+                  Clear Selection
+                </button>
                 <button id="new-scenario-button" class="action-button" type="button">
                   New Scenario
+                </button>
+                <button id="duplicate-scenario-button" class="action-button" type="button" disabled>
+                  Duplicate
+                </button>
+                <button id="run-selected-scenario-button" class="action-button" type="button" disabled>
+                  Run Selected
                 </button>
                 <button id="delete-scenario-button" class="action-button danger" type="button" disabled>
                   Delete Scenario
@@ -317,7 +333,130 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
               <span id="builder-status" class="muted" aria-live="polite">Create a new scenario or select one to edit</span>
             </div>
             </form>
+            <div class="manager-assist-grid">
+              <section class="manager-assist-panel">
+                <div class="manager-assist-heading">
+                  <div>
+                    <p class="eyebrow">Validation Preview</p>
+                    <h2>Draft Checks</h2>
+                  </div>
+                  <span id="scenario-validation-chip" class="status-pill neutral">IDLE</span>
+                </div>
+                <div id="scenario-validation-list" class="manager-assist-body">
+                  <div class="notice">Edit the form to see validation signals.</div>
+                </div>
+              </section>
+              <section class="manager-assist-panel">
+                <div class="manager-assist-heading">
+                  <div>
+                    <p class="eyebrow">Diff Preview</p>
+                    <h2>Draft Changes</h2>
+                  </div>
+                  <span id="scenario-diff-chip" class="status-pill neutral">IDLE</span>
+                </div>
+                <div id="scenario-diff-list" class="manager-assist-body">
+                  <div class="notice">Select a scenario or duplicate one to compare changes.</div>
+                </div>
+              </section>
+            </div>
+            <div class="scenario-preview">
+              <div class="scenario-preview-heading">
+                <div>
+                  <p class="eyebrow">Scenario Preview</p>
+                  <h2 id="scenario-preview-title">No Run Selected</h2>
+                </div>
+                <span id="scenario-preview-chip" class="status-pill neutral">IDLE</span>
+              </div>
+              <div id="scenario-preview-body" class="scenario-preview-body">
+                <div class="notice">Select a scenario and run it to preview actual signals and checks.</div>
+              </div>
+            </div>
           </details>
+        </section>
+
+        <section class="test-lab" data-tab-panel="test-lab" aria-label="Test Lab">
+          <div class="test-lab-heading">
+            <div>
+              <p class="eyebrow">Test Lab</p>
+              <h2>Run Scenarios and Benchmarks</h2>
+            </div>
+            <span id="test-lab-chip" class="status-pill neutral">READY</span>
+          </div>
+
+          <div class="test-lab-grid">
+            <section class="test-lab-card">
+              <div class="test-lab-card-heading">
+                <div>
+                  <p class="eyebrow">Scenario Suite</p>
+                  <h2>Full YAML Sweep</h2>
+                </div>
+                <span id="test-suite-chip" class="status-pill neutral">--</span>
+              </div>
+              <div id="test-suite-summary" class="test-lab-card-body">
+                <div class="notice">Loading latest scenario report</div>
+              </div>
+              <div class="test-lab-actions">
+                <button id="run-scenario-button" class="action-button primary" type="button">
+                  Run Suite
+                </button>
+              </div>
+            </section>
+
+            <section class="test-lab-card">
+              <div class="test-lab-card-heading">
+                <div>
+                  <p class="eyebrow">Single Scenario</p>
+                  <h2>Targeted Case</h2>
+                </div>
+                <span id="test-single-chip" class="status-pill neutral">--</span>
+              </div>
+              <div class="test-lab-card-body">
+                <label class="field">
+                  <span>Scenario</span>
+                  <select id="test-scenario-select"></select>
+                </label>
+                <div id="test-selected-scenario-meta" class="test-selected-scenario">
+                  <div class="notice">Loading scenario library</div>
+                </div>
+              </div>
+              <div class="test-lab-actions">
+                <button id="test-run-selected-scenario-button" class="action-button primary" type="button" disabled>
+                  Run Selected
+                </button>
+              </div>
+            </section>
+
+            <section class="test-lab-card">
+              <div class="test-lab-card-heading">
+                <div>
+                  <p class="eyebrow">Benchmark</p>
+                  <h2>Latency Gate</h2>
+                </div>
+                <span id="test-benchmark-chip" class="status-pill neutral">--</span>
+              </div>
+              <div id="test-benchmark-summary" class="test-lab-card-body">
+                <div class="notice">Loading latest benchmark report</div>
+              </div>
+              <div class="test-lab-actions">
+                <button id="run-benchmark-button" class="action-button primary" type="button">
+                  Run Benchmark
+                </button>
+              </div>
+            </section>
+
+            <section class="test-lab-card test-lab-result">
+              <div class="test-lab-card-heading">
+                <div>
+                  <p class="eyebrow">Latest Lab Result</p>
+                  <h2 id="test-lab-result-title">No Run Triggered</h2>
+                </div>
+                <span id="test-lab-result-chip" class="status-pill neutral">IDLE</span>
+              </div>
+              <div id="test-lab-result-body" class="test-lab-card-body">
+                <div class="notice">Run a suite, targeted scenario, or benchmark to inspect the result here.</div>
+              </div>
+            </section>
+          </div>
         </section>
 
         <section class="content-grid" data-tab-panel="dashboard">
@@ -431,6 +570,6 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
       </main>
     </div>
 
-    <script src="/dashboard/static/dashboard.js?v=scenario-manager-v2"></script>
+    <script src="/dashboard/static/dashboard.js?v=scenario-multi-select-v1"></script>
   </body>
 </html>

@@ -27,7 +27,11 @@ from origami.evaluation.scenario_builder import (
     save_scenario,
     update_scenario,
 )
-from origami.evaluation.scenario_runner import DEFAULT_REPORT_PATH, run_default_scenario_suite
+from origami.evaluation.scenario_runner import (
+    DEFAULT_REPORT_PATH,
+    run_default_scenario_suite,
+    run_scenario_case,
+)
 from origami.persistence.run_history import RunHistoryStore
 
 app = FastAPI(title="Origami Mini PIC 2.0 DevOps Platform")
@@ -148,6 +152,16 @@ def scenario_run() -> dict[str, Any]:
     report = run_default_scenario_suite()
     report["history_record"] = RUN_HISTORY.record("scenario", report)
     return report
+
+
+@app.post("/runs/scenario/{scenario_id}")
+def scenario_run_one(scenario_id: str) -> dict[str, Any]:
+    try:
+        report = run_scenario_case(scenario_id)
+        report["history_record"] = RUN_HISTORY.record("scenario", report)
+        return report
+    except ValueError as exc:
+        raise _scenario_http_error(exc) from exc
 
 
 @app.post("/runs/benchmark")

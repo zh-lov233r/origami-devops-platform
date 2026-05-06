@@ -291,6 +291,96 @@ h2 {
   margin-top: 10px;
 }
 
+.test-lab {
+  display: grid;
+  gap: 10px;
+}
+
+.test-lab-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.test-lab-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.test-lab-card {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.test-lab-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 46px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfd;
+}
+
+.test-lab-card-body {
+  display: grid;
+  gap: 10px;
+  min-height: 118px;
+  padding: 12px;
+}
+
+.test-lab-actions {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 12px 12px;
+}
+
+.test-lab-result {
+  grid-column: 1 / -1;
+}
+
+.test-lab-result .test-lab-card-body {
+  min-height: 180px;
+}
+
+.test-selected-scenario {
+  min-height: 64px;
+}
+
+.test-selected-scenario-card {
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.test-selected-scenario-card strong {
+  font-size: 13px;
+}
+
+.test-selected-scenario-card span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .builder-panel {
   margin-bottom: 10px;
 }
@@ -951,6 +1041,15 @@ tbody tr.selected {
   font-weight: 900;
 }
 
+.raw-snapshot summary {
+  min-height: 38px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .raw-snapshot pre {
   max-height: 360px;
   margin: 0;
@@ -966,6 +1065,114 @@ tbody tr.selected {
 .builder-form {
   padding: 12px;
   border-bottom: 1px solid var(--line);
+}
+
+.scenario-preview {
+  border-top: 1px solid var(--line);
+  background: #fbfcfd;
+}
+
+.manager-assist-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  background: #fbfcfd;
+}
+
+.manager-assist-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.manager-assist-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 46px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.manager-assist-body {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.assist-row,
+.diff-row {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.assist-row strong,
+.diff-row strong {
+  font-size: 12px;
+}
+
+.assist-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.assist-row.pass {
+  border-color: #86efac;
+  background: var(--green-bg);
+}
+
+.assist-row.warn {
+  border-color: #fdb022;
+  background: var(--yellow-bg);
+}
+
+.assist-row.fail {
+  border-color: #fda29b;
+  background: var(--red-bg);
+}
+
+.diff-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.diff-values code {
+  min-height: 28px;
+  padding: 6px;
+  border-radius: 7px;
+  background: var(--surface-subtle);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.scenario-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.scenario-preview-body {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
 }
 
 .builder-section-label {
@@ -1141,7 +1348,8 @@ tbody tr.selected {
 
 .scenario-item {
   display: grid;
-  gap: 6px;
+  grid-template-columns: 1fr auto;
+  gap: 7px;
   min-height: 64px;
   padding: 8px;
   border: 1px solid var(--line);
@@ -1159,16 +1367,59 @@ tbody tr.selected {
   background: #eff6ff;
 }
 
-.scenario-item strong,
-.scenario-item small {
+.scenario-item.multi-selected {
+  border-color: #60a5fa;
+  background: #f0f7ff;
+}
+
+.scenario-item.selected.multi-selected {
+  border-color: #2563eb;
+}
+
+.scenario-select-control {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  align-self: start;
+  gap: 5px;
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fbfcfd;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.scenario-select-control input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #175cd3;
+}
+
+.scenario-item-copy {
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.scenario-item .tag-row {
+  grid-column: 1 / -1;
+}
+
+.scenario-item-copy strong,
+.scenario-item-copy small {
   display: block;
 }
 
-.scenario-item strong {
+.scenario-item-copy strong {
   font-size: 12px;
 }
 
-.scenario-item small {
+.scenario-item-copy small {
   margin-top: 2px;
   color: var(--muted);
   font-size: 11px;
@@ -1184,7 +1435,8 @@ tbody tr.selected {
 @media (max-width: 1120px) {
   .metric-grid,
   .content-grid,
-  .visual-grid {
+  .visual-grid,
+  .test-lab-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1194,6 +1446,10 @@ tbody tr.selected {
 
   .form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .manager-assist-grid {
+    grid-template-columns: 1fr;
   }
 
   .detail-stat-grid,
@@ -1229,8 +1485,10 @@ tbody tr.selected {
   .metric-grid,
   .content-grid,
   .visual-grid,
+  .test-lab-grid,
   .module-grid,
   .form-grid,
+  .diff-values,
   .detail-stat-grid,
   .detail-stat-grid.compact {
     grid-template-columns: 1fr;

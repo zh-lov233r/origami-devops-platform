@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from shutil import copyfile
 
-from origami.evaluation.scenario_runner import run_scenario_suite
+from origami.evaluation.scenario_runner import run_scenario_case, run_scenario_suite
 
 
 BUILT_IN_SCENARIOS = [
@@ -46,3 +46,18 @@ def test_scenario_runner_executes_all_carry_go_cases(tmp_path: Path) -> None:
     assert (tmp_path / "reports/scenario_report.md").exists()
     assert (tmp_path / "events/scenario_events.jsonl").exists()
     assert (tmp_path / "audit/scenario_audit.jsonl").exists()
+
+
+def test_scenario_runner_executes_one_case(tmp_path: Path) -> None:
+    scenario_dir = tmp_path / "scenarios"
+    scenario_dir.mkdir()
+    copyfile(Path("configs/scenarios") / "normal_delivery.yaml", scenario_dir / "normal_delivery.yaml")
+
+    report = run_scenario_case("normal_delivery", scenario_dir)
+
+    assert report["total"] == 1
+    assert report["passed"] == 1
+    assert report["quality_gate_passed"] is True
+    assert report["scenario"]["id"] == "normal_delivery"
+    assert report["scenario"]["actual"]["final_move"] == "east"
+    assert "seom" in report["summary"]["module_latency_ms"]
