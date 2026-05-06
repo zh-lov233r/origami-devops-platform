@@ -72,6 +72,9 @@ let selectedScenarioSnapshot = null;
 let selectedScenarioIds = new Set();
 let scenarioDraftBaseSnapshot = null;
 let scenarioLibraryRecords = [];
+let scenarioSearchTerm = "";
+let scenarioTagFilter = "";
+let activeBuilderFormTab = "common";
 let latestScenarioPreview = null;
 let testLabSelectedScenarioId = null;
 let latestTestLabResult = null;
@@ -82,6 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
   registerTestLab();
   registerScenarioBuilder();
   registerHistoryDetails();
+  activateBuilderFormTab(activeBuilderFormTab);
   renderScenarioDraftAssist();
   loadDashboard();
 });
@@ -238,6 +242,21 @@ function registerScenarioBuilder() {
   document.getElementById("clear-scenario-selection-button").addEventListener("click", () => {
     clearScenarioSelection();
   });
+  document.getElementById("scenario-search-input").addEventListener("input", (event) => {
+    scenarioSearchTerm = event.target.value.trim().toLowerCase();
+    renderScenarioLibraryItems();
+    updateScenarioSelectionControls();
+  });
+  document.getElementById("scenario-tag-filter").addEventListener("change", (event) => {
+    scenarioTagFilter = event.target.value;
+    renderScenarioLibraryItems();
+    updateScenarioSelectionControls();
+  });
+  document.querySelectorAll("[data-builder-form-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activateBuilderFormTab(button.dataset.builderFormTab);
+    });
+  });
   document.getElementById("duplicate-scenario-button").addEventListener("click", () => {
     duplicateSelectedScenario();
   });
@@ -284,6 +303,19 @@ function registerScenarioBuilder() {
   });
   document.getElementById("scenario-builder-form").addEventListener("change", () => {
     renderScenarioDraftAssist();
+  });
+}
+
+function activateBuilderFormTab(tabId) {
+  const selectedTab = tabId || "common";
+  activeBuilderFormTab = selectedTab;
+  document.querySelectorAll("[data-builder-form-tab]").forEach((button) => {
+    const isActive = button.dataset.builderFormTab === selectedTab;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+  document.querySelectorAll("[data-builder-form-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.builderFormPanel !== selectedTab;
   });
 }
 
@@ -1288,12 +1320,23 @@ function renderScenarioLibrary(payload) {
     selectedScenarioSnapshot = null;
     setScenarioManagerMode("create");
   }
-  const container = document.getElementById("scenario-library-list");
   setPill("scenario-library-chip", `${payload?.count || 0} YAML`, payload?.available ? "info" : "warn");
+  renderScenarioTagFilterOptions();
+  renderScenarioLibraryItems();
   updateScenarioSelectionControls();
+}
+
+function renderScenarioLibraryItems() {
+  const container = document.getElementById("scenario-library-list");
+  const scenarios = filteredScenarioRecords();
+
+  if (!scenarioLibraryRecords.length) {
+    container.innerHTML = `<div class="notice">No scenario YAML files</div>`;
+    return;
+  }
 
   if (!scenarios.length) {
-    container.innerHTML = `<div class="notice">No scenario YAML files</div>`;
+    container.innerHTML = `<div class="notice">No scenarios match the current filters</div>`;
     return;
   }
 
@@ -1331,6 +1374,38 @@ function renderScenarioLibrary(payload) {
   syncScenarioSelectionClasses();
 }
 
+function renderScenarioTagFilterOptions() {
+  const select = document.getElementById("scenario-tag-filter");
+  const tags = [
+    ...new Set(scenarioLibraryRecords.flatMap((scenario) => scenario.tags || [])),
+  ].sort((left, right) => left.localeCompare(right));
+  if (scenarioTagFilter && !tags.includes(scenarioTagFilter)) {
+    scenarioTagFilter = "";
+  }
+  select.innerHTML = [
+    `<option value="">All tags</option>`,
+    ...tags.map((tag) => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`),
+  ].join("");
+  select.value = scenarioTagFilter;
+}
+
+function filteredScenarioRecords() {
+  return scenarioLibraryRecords.filter((scenario) => {
+    const searchable = [
+      scenario.id,
+      scenario.name,
+      scenario.description,
+      ...(scenario.tags || []),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const matchesSearch = !scenarioSearchTerm || searchable.includes(scenarioSearchTerm);
+    const matchesTag = !scenarioTagFilter || (scenario.tags || []).includes(scenarioTagFilter);
+    return matchesSearch && matchesTag;
+  });
+}
+
 function toggleScenarioSelection(scenarioId, checked = null) {
   if (!scenarioId) {
     return;
@@ -1347,7 +1422,9 @@ function toggleScenarioSelection(scenarioId, checked = null) {
 }
 
 function selectAllScenarios() {
-  selectedScenarioIds = new Set(scenarioLibraryRecords.map((scenario) => scenario.id));
+  filteredScenarioRecords().forEach((scenario) => {
+    selectedScenarioIds.add(scenario.id);
+  });
   syncScenarioSelectionClasses();
   updateScenarioSelectionControls();
   setBuilderStatus(`Selected ${selectedScenarioIds.size} scenarios`, "info");
@@ -1370,14 +1447,18 @@ function selectedScenarioOperationIds() {
 function updateScenarioSelectionControls() {
   const selectedCount = selectedScenarioIds.size;
   const operationCount = selectedScenarioOperationIds().length;
+  const visibleScenarios = filteredScenarioRecords();
+  const allVisibleSelected =
+    visibleScenarios.length > 0 && visibleScenarios.every((scenario) => selectedScenarioIds.has(scenario.id));
   setPill(
     "scenario-selection-chip",
     selectedCount ? `${selectedCount} SELECTED` : "0 SELECTED",
     selectedCount ? "info" : "neutral",
   );
+  document.getElementById("manager-bulk-bar").hidden = selectedCount === 0;
   document.getElementById("clear-scenario-selection-button").disabled = selectedCount === 0;
   document.getElementById("select-all-scenarios-button").disabled =
-    !scenarioLibraryRecords.length || selectedCount === scenarioLibraryRecords.length;
+    !visibleScenarios.length || allVisibleSelected;
   document.getElementById("run-selected-scenario-button").disabled = operationCount === 0;
   document.getElementById("delete-scenario-button").disabled = operationCount === 0;
   document.getElementById("run-selected-scenario-button").textContent =
