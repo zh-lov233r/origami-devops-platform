@@ -291,6 +291,61 @@ h2 {
   margin-top: 10px;
 }
 
+.history-controls {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(140px, 0.35fr) minmax(140px, 0.35fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfd;
+}
+
+.history-compare-panel {
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfd;
+}
+
+.history-compare-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 46px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.history-compare-body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.history-compare-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.history-compare-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.history-compare-control input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #175cd3;
+}
+
 .test-lab {
   display: grid;
   gap: 10px;
@@ -356,6 +411,111 @@ h2 {
 
 .test-lab-result .test-lab-card-body {
   min-height: 180px;
+}
+
+.test-lab-queue {
+  grid-column: 1 / -1;
+}
+
+.queue-list {
+  display: grid;
+  gap: 8px;
+}
+
+.queue-item {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.queue-item-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.queue-item-heading strong,
+.queue-item-heading span {
+  display: block;
+}
+
+.queue-item-heading strong {
+  font-size: 13px;
+}
+
+.queue-item-heading span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.queue-progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.queue-progress-fill {
+  height: 100%;
+  min-width: 4px;
+  border-radius: inherit;
+  background: var(--blue);
+}
+
+.queue-progress-fill.pass {
+  background: var(--green);
+}
+
+.queue-progress-fill.fail {
+  background: var(--red);
+}
+
+.queue-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.queue-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--blue-bg);
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.queue-step.pass {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.queue-step.fail,
+.queue-error {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.queue-step small {
+  color: inherit;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.queue-error {
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .test-selected-scenario {
@@ -588,7 +748,7 @@ table {
 }
 
 .history-table {
-  min-width: 900px;
+  min-width: 980px;
 }
 
 th,
@@ -1537,7 +1697,9 @@ tbody tr.selected {
   .metric-grid,
   .content-grid,
   .visual-grid,
-  .test-lab-grid {
+  .test-lab-grid,
+  .history-controls,
+  .history-compare-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1603,6 +1765,8 @@ tbody tr.selected {
   .content-grid,
   .visual-grid,
   .test-lab-grid,
+  .history-controls,
+  .history-compare-summary,
   .module-grid,
   .form-grid,
   .diff-values,

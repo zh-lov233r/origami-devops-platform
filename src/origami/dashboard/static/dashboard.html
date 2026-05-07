@@ -8,7 +8,7 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Origami Artifact Dashboard</title>
-    <link rel="stylesheet" href="/dashboard/static/dashboard.css?v=scenario-layout-v1" />
+    <link rel="stylesheet" href="/dashboard/static/dashboard.css?v=lab-history-v1" />
   </head>
   <body>
     <div class="app-shell">
@@ -518,6 +518,19 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
                 <div class="notice">Run a suite, targeted scenario, or benchmark to inspect the result here.</div>
               </div>
             </section>
+
+            <section class="test-lab-card test-lab-queue">
+              <div class="test-lab-card-heading">
+                <div>
+                  <p class="eyebrow">Run Queue</p>
+                  <h2>Progress</h2>
+                </div>
+                <span id="test-run-queue-chip" class="status-pill neutral">IDLE</span>
+              </div>
+              <div id="test-run-queue-body" class="test-lab-card-body">
+                <div class="notice">Triggered Test Lab runs will appear here.</div>
+              </div>
+            </section>
           </div>
         </section>
 
@@ -608,10 +621,48 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
             </div>
             <span id="history-chip" class="status-pill neutral">--</span>
           </div>
+          <div class="history-controls">
+            <label class="field">
+              <span>Search Runs</span>
+              <input id="history-search-input" type="search" placeholder="Run id, artifact, scope" />
+            </label>
+            <label class="field">
+              <span>Type</span>
+              <select id="history-type-filter">
+                <option value="">All types</option>
+                <option value="scenario">Scenario</option>
+                <option value="benchmark">Benchmark</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Gate</span>
+              <select id="history-gate-filter">
+                <option value="">All gates</option>
+                <option value="pass">Pass</option>
+                <option value="fail">Fail</option>
+              </select>
+            </label>
+            <button id="clear-history-filters-button" class="action-button" type="button">
+              Clear Filters
+            </button>
+          </div>
+          <div class="history-compare-panel">
+            <div class="history-compare-heading">
+              <div>
+                <p class="eyebrow">Compare Runs</p>
+                <h2 id="history-compare-title">Select Two Runs</h2>
+              </div>
+              <span id="history-compare-chip" class="status-pill neutral">0 SELECTED</span>
+            </div>
+            <div id="history-compare-body" class="history-compare-body">
+              <div class="notice">Check two runs in the table to compare gate, scope, latency, and violations.</div>
+            </div>
+          </div>
           <div class="table-wrap">
             <table class="history-table">
               <thead>
                 <tr>
+                  <th>Compare</th>
                   <th>Run</th>
                   <th>Type</th>
                   <th>Gate</th>
@@ -623,7 +674,7 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
               </thead>
               <tbody id="history-table-body">
                 <tr>
-                  <td colspan="7" class="empty-cell">Loading</td>
+                  <td colspan="8" class="empty-cell">Loading</td>
                 </tr>
               </tbody>
             </table>
@@ -632,6 +683,6 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
       </main>
     </div>
 
-    <script src="/dashboard/static/dashboard.js?v=scenario-layout-v1"></script>
+    <script src="/dashboard/static/dashboard.js?v=lab-history-v1"></script>
   </body>
 </html>

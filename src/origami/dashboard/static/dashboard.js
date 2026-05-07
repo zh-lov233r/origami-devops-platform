@@ -31,6 +31,7 @@ const ACTION_BUTTON_IDS = [
   "duplicate-scenario-button",
   "delete-scenario-button",
   "run-selected-scenario-button",
+  "clear-history-filters-button",
 ];
 
 const TAB_IDS = ["dashboard", "scenario-builder", "test-lab", "run-history"];
@@ -78,6 +79,14 @@ let activeBuilderFormTab = "common";
 let latestScenarioPreview = null;
 let testLabSelectedScenarioId = null;
 let latestTestLabResult = null;
+let testRunQueue = [];
+let nextTestRunQueueId = 1;
+let historyRecords = [];
+let historySearchTerm = "";
+let historyTypeFilter = "";
+let historyGateFilter = "";
+let historyCompareIds = [];
+const historyDetailCache = new Map();
 
 document.addEventListener("DOMContentLoaded", () => {
   registerTabs();
@@ -321,7 +330,38 @@ function activateBuilderFormTab(tabId) {
 
 function registerHistoryDetails() {
   const tableBody = document.getElementById("history-table-body");
+  document.getElementById("history-search-input").addEventListener("input", (event) => {
+    historySearchTerm = event.target.value.trim().toLowerCase();
+    renderHistory({ records: historyRecords, count: historyRecords.length, available: true });
+  });
+  document.getElementById("history-type-filter").addEventListener("change", (event) => {
+    historyTypeFilter = event.target.value;
+    renderHistory({ records: historyRecords, count: historyRecords.length, available: true });
+  });
+  document.getElementById("history-gate-filter").addEventListener("change", (event) => {
+    historyGateFilter = event.target.value;
+    renderHistory({ records: historyRecords, count: historyRecords.length, available: true });
+  });
+  document.getElementById("clear-history-filters-button").addEventListener("click", () => {
+    historySearchTerm = "";
+    historyTypeFilter = "";
+    historyGateFilter = "";
+    document.getElementById("history-search-input").value = "";
+    document.getElementById("history-type-filter").value = "";
+    document.getElementById("history-gate-filter").value = "";
+    renderHistory({ records: historyRecords, count: historyRecords.length, available: true });
+  });
+  tableBody.addEventListener("change", (event) => {
+    const selector = closestFromEvent(event, "[data-history-compare-selector]");
+    if (!selector) {
+      return;
+    }
+    toggleHistoryCompare(selector.dataset.historyCompareSelector, selector.checked);
+  });
   tableBody.addEventListener("click", (event) => {
+    if (closestFromEvent(event, "[data-history-compare-control]")) {
+      return;
+    }
     const moreButton = closestFromEvent(event, "[data-history-more-button]");
     if (moreButton) {
       toggleHistoryMore(moreButton);
@@ -348,23 +388,134 @@ function registerHistoryDetails() {
 }
 
 async function runTestLabAction(label, url, resultType) {
+  const queueId = enqueueTestRun(label, resultType);
   setActionBusy(true);
   setActionStatus(`${label} running`, "info");
   renderTestLabResultLoading(label);
 
   try {
+    updateTestRunQueueItem(queueId, { status: "running", progress: 35 });
     const report = await postJson(url);
+    updateTestRunQueueItem(queueId, {
+      status: report.quality_gate_passed ? "pass" : "fail",
+      progress: 100,
+      completedAt: new Date().toISOString(),
+      report,
+      steps: testRunQueueSteps(report, resultType),
+    });
     latestTestLabResult = { label, report, resultType };
     await loadDashboard();
     renderTestLabResult(label, report, resultType);
     setActionStatus(`${label} complete at ${new Date().toLocaleTimeString()}`, "pass");
   } catch (error) {
+    updateTestRunQueueItem(queueId, {
+      status: "fail",
+      progress: 100,
+      completedAt: new Date().toISOString(),
+      error: error.message,
+    });
     latestTestLabResult = null;
     renderTestLabResultError(label, error);
     setActionStatus(`${label} failed: ${error.message}`, "fail");
   } finally {
     setActionBusy(false);
   }
+}
+
+function enqueueTestRun(label, resultType) {
+  const queueItem = {
+    id: nextTestRunQueueId,
+    label,
+    resultType,
+    status: "queued",
+    progress: 8,
+    startedAt: new Date().toISOString(),
+    steps: [],
+  };
+  nextTestRunQueueId += 1;
+  testRunQueue = [queueItem, ...testRunQueue].slice(0, 8);
+  renderTestRunQueue();
+  return queueItem.id;
+}
+
+function updateTestRunQueueItem(queueId, patch) {
+  testRunQueue = testRunQueue.map((item) =>
+    item.id === queueId ? { ...item, ...patch } : item,
+  );
+  renderTestRunQueue();
+}
+
+function testRunQueueSteps(report, resultType) {
+  if (resultType === "benchmark") {
+    return Object.entries(report.module_latency_ms || {}).map(([name, metrics]) => ({
+      name,
+      status: "pass",
+      detail: `p95 ${formatNumber(metrics.p95)} ms`,
+    }));
+  }
+
+  return (report.scenarios || (report.scenario ? [report.scenario] : [])).map((scenario) => ({
+    name: scenario.id || scenario.name || "scenario",
+    status: scenario.passed ? "pass" : "fail",
+    detail: scenario.actual?.final_move || "--",
+  }));
+}
+
+function renderTestRunQueue() {
+  const container = document.getElementById("test-run-queue-body");
+  const activeCount = testRunQueue.filter((item) => ["queued", "running"].includes(item.status)).length;
+  setPill(
+    "test-run-queue-chip",
+    activeCount ? `${activeCount} ACTIVE` : testRunQueue.length ? `${testRunQueue.length} RECENT` : "IDLE",
+    activeCount ? "info" : testRunQueue.length ? "neutral" : "neutral",
+  );
+
+  if (!testRunQueue.length) {
+    container.innerHTML = `<div class="notice">Triggered Test Lab runs will appear here.</div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="queue-list">
+      ${testRunQueue.map(renderTestRunQueueItem).join("")}
+    </div>
+  `;
+}
+
+function renderTestRunQueueItem(item) {
+  const kind = item.status === "pass" ? "pass" : item.status === "fail" ? "fail" : "info";
+  const progress = Math.max(0, Math.min(100, Number(item.progress || 0)));
+  const steps = (item.steps || []).slice(0, 8);
+  return `
+    <div class="queue-item">
+      <div class="queue-item-heading">
+        <div>
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(formatTimestamp(item.startedAt))}</span>
+        </div>
+        <span class="status-pill ${kind}">${escapeHtml(item.status.toUpperCase())}</span>
+      </div>
+      <div class="queue-progress" aria-label="${escapeHtml(item.label)} progress">
+        <div class="queue-progress-fill ${kind}" style="width: ${progress}%"></div>
+      </div>
+      ${
+        item.error
+          ? `<div class="queue-error">${escapeHtml(item.error)}</div>`
+          : steps.length
+            ? `<div class="queue-steps">${steps.map(renderQueueStep).join("")}</div>`
+            : `<div class="queue-steps"><span class="queue-step info">Waiting for result</span></div>`
+      }
+    </div>
+  `;
+}
+
+function renderQueueStep(step) {
+  const kind = step.status === "pass" ? "pass" : step.status === "fail" ? "fail" : "info";
+  return `
+    <span class="queue-step ${kind}">
+      ${escapeHtml(step.name)} ${step.detail ? `<small>${escapeHtml(step.detail)}</small>` : ""}
+    </span>
+  `;
 }
 
 async function saveScenarioFromBuilder(runAfterSave) {
@@ -1484,6 +1635,7 @@ function renderTestLab(scenarioReport, benchmarkReport, scenariosPayload) {
   renderTestLabSuiteSummary(scenarioReport);
   renderTestLabBenchmarkSummary(benchmarkReport);
   renderTestLabScenarioSelector(scenariosPayload?.scenarios || []);
+  renderTestRunQueue();
   if (latestTestLabResult) {
     renderTestLabResult(
       latestTestLabResult.label,
@@ -1809,13 +1961,30 @@ function renderAudit(auditPayload) {
 }
 
 function renderHistory(historyPayload) {
-  const records = historyPayload.records || [];
+  historyRecords = historyPayload.records || [];
+  historyCompareIds = historyCompareIds.filter((id) =>
+    historyRecords.some((record) => record.id === id),
+  );
+  const records = filteredHistoryRecords();
   const tableBody = document.getElementById("history-table-body");
 
-  setPill("history-chip", `${historyPayload.count || 0} RUNS`, historyPayload.available ? "info" : "warn");
+  setPill(
+    "history-chip",
+    records.length === historyRecords.length
+      ? `${historyPayload.count || 0} RUNS`
+      : `${records.length}/${historyRecords.length} RUNS`,
+    historyPayload.available ? "info" : "warn",
+  );
+  renderHistoryComparePanel();
+
+  if (!historyRecords.length) {
+    tableBody.innerHTML = `<tr><td colspan="8" class="empty-cell">No dashboard-triggered runs yet</td></tr>`;
+    renderHistoryDetailEmpty();
+    return;
+  }
 
   if (!records.length) {
-    tableBody.innerHTML = `<tr><td colspan="7" class="empty-cell">No dashboard-triggered runs yet</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="8" class="empty-cell">No runs match the current filters</td></tr>`;
     renderHistoryDetailEmpty();
     return;
   }
@@ -1832,6 +2001,17 @@ function renderHistory(historyPayload) {
           role="button"
           aria-label="View run details for ${escapeHtml(record.id)}"
         >
+          <td data-history-compare-control>
+            <label class="history-compare-control">
+              <input
+                type="checkbox"
+                data-history-compare-selector="${escapeHtml(record.id)}"
+                ${historyCompareIds.includes(record.id) ? "checked" : ""}
+                aria-label="Compare ${escapeHtml(record.id)}"
+              />
+              <span>Compare</span>
+            </label>
+          </td>
           <td>
             <div class="history-run">
               <strong>${formatTimestamp(record.generated_at || record.recorded_at)}</strong>
@@ -1856,6 +2036,202 @@ function renderHistory(historyPayload) {
   } else {
     markSelectedHistoryRow(selectedHistoryRunId);
   }
+}
+
+function filteredHistoryRecords() {
+  return historyRecords.filter((record) => {
+    const gate = record.quality_gate_passed ? "pass" : "fail";
+    const searchable = [
+      record.id,
+      record.type,
+      record.artifact_path,
+      record.generated_at,
+      record.recorded_at,
+      historyScope(record),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const matchesSearch = !historySearchTerm || searchable.includes(historySearchTerm);
+    const matchesType = !historyTypeFilter || record.type === historyTypeFilter;
+    const matchesGate = !historyGateFilter || gate === historyGateFilter;
+    return matchesSearch && matchesType && matchesGate;
+  });
+}
+
+function toggleHistoryCompare(recordId, checked) {
+  if (!recordId) {
+    return;
+  }
+  if (checked) {
+    historyCompareIds = historyCompareIds.filter((id) => id !== recordId);
+    historyCompareIds.push(recordId);
+    historyCompareIds = historyCompareIds.slice(-2);
+  } else {
+    historyCompareIds = historyCompareIds.filter((id) => id !== recordId);
+  }
+  syncHistoryCompareControls();
+  renderHistoryComparePanel();
+}
+
+function syncHistoryCompareControls() {
+  document.querySelectorAll("[data-history-compare-selector]").forEach((checkbox) => {
+    checkbox.checked = historyCompareIds.includes(checkbox.dataset.historyCompareSelector);
+  });
+}
+
+function renderHistoryComparePanel() {
+  const selectedCount = historyCompareIds.length;
+  setPill(
+    "history-compare-chip",
+    `${selectedCount} SELECTED`,
+    selectedCount === 2 ? "info" : "neutral",
+  );
+  setText("history-compare-title", selectedCount === 2 ? "Run Delta" : "Select Two Runs");
+
+  if (selectedCount < 2) {
+    document.getElementById("history-compare-body").innerHTML =
+      `<div class="notice">Check two runs in the table to compare gate, scope, latency, and violations.</div>`;
+    return;
+  }
+
+  document.getElementById("history-compare-body").innerHTML =
+    `<div class="notice">Loading comparison</div>`;
+  loadHistoryCompare(historyCompareIds);
+}
+
+async function loadHistoryCompare(compareIds) {
+  try {
+    const details = await Promise.all(compareIds.map(fetchHistoryDetailForCompare));
+    if (compareIds.join("|") !== historyCompareIds.join("|")) {
+      return;
+    }
+    renderHistoryComparison(details[0], details[1]);
+  } catch (error) {
+    document.getElementById("history-compare-body").innerHTML =
+      `<div class="notice">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function fetchHistoryDetailForCompare(recordId) {
+  if (historyDetailCache.has(recordId)) {
+    return historyDetailCache.get(recordId);
+  }
+  const payload = await fetchJson(ENDPOINTS.historyDetail(recordId));
+  historyDetailCache.set(recordId, payload);
+  return payload;
+}
+
+function renderHistoryComparison(leftPayload, rightPayload) {
+  const leftRecord = leftPayload.record || {};
+  const rightRecord = rightPayload.record || {};
+  const leftReport = leftPayload.data || {};
+  const rightReport = rightPayload.data || {};
+  const leftLatency = reportModuleLatency(leftReport);
+  const rightLatency = reportModuleLatency(rightReport);
+  const leftViolations = totalCount(leftReport.summary?.violation_counts || {});
+  const rightViolations = totalCount(rightReport.summary?.violation_counts || {});
+  const leftP95 = maxModuleP95(leftLatency);
+  const rightP95 = maxModuleP95(rightLatency);
+
+  document.getElementById("history-compare-body").innerHTML = `
+    <div class="history-compare-summary">
+      ${renderDetailStat("Left", shortHash(leftRecord.id || leftPayload.id))}
+      ${renderDetailStat("Right", shortHash(rightRecord.id || rightPayload.id))}
+      ${renderDetailStat("Gate", `${gateLabel(leftRecord)} -> ${gateLabel(rightRecord)}`)}
+      ${renderDetailStat("Scope", `${historyScope(leftRecord)} -> ${historyScope(rightRecord)}`)}
+      ${renderDetailStat("Max P95 Delta", deltaNumber(rightP95 - leftP95, " ms"))}
+      ${renderDetailStat("Violation Delta", deltaNumber(rightViolations - leftViolations, ""))}
+    </div>
+    ${renderHistoryCompareLatency(leftLatency, rightLatency)}
+    ${renderHistoryCompareScenarioDelta(leftReport, rightReport)}
+  `;
+}
+
+function renderHistoryCompareLatency(leftLatency, rightLatency) {
+  const modules = [...new Set([...Object.keys(leftLatency), ...Object.keys(rightLatency)])].sort();
+  if (!modules.length) {
+    return `<div class="notice">No comparable latency metrics</div>`;
+  }
+
+  return `
+    <div class="detail-table-wrap">
+      <table class="detail-table latency-detail-table">
+        <thead>
+          <tr>
+            <th>Module</th>
+            <th>Left P95</th>
+            <th>Right P95</th>
+            <th>Delta</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${modules
+            .map((moduleName) => {
+              const left = numberOrZero(leftLatency[moduleName]?.p95);
+              const right = numberOrZero(rightLatency[moduleName]?.p95);
+              return `
+                <tr>
+                  <td><strong>${escapeHtml(moduleName)}</strong></td>
+                  <td>${formatNumber(left)} ms</td>
+                  <td>${formatNumber(right)} ms</td>
+                  <td>${deltaNumber(right - left, " ms")}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderHistoryCompareScenarioDelta(leftReport, rightReport) {
+  const leftScenarios = scenarioResultMap(leftReport.scenarios || []);
+  const rightScenarios = scenarioResultMap(rightReport.scenarios || []);
+  const scenarioIds = [...new Set([...Object.keys(leftScenarios), ...Object.keys(rightScenarios)])].sort();
+  const changed = scenarioIds.filter((scenarioId) =>
+    stableStringify(leftScenarios[scenarioId]) !== stableStringify(rightScenarios[scenarioId]),
+  );
+
+  if (!scenarioIds.length) {
+    return "";
+  }
+  if (!changed.length) {
+    return `<div class="notice">Scenario outcomes match across the selected runs.</div>`;
+  }
+
+  return `
+    <div class="history-detail-section">
+      <div class="detail-section-heading">
+        <h3>Scenario Outcome Changes</h3>
+        <span class="status-pill info">${changed.length} CHANGED</span>
+      </div>
+      <div class="detail-table-wrap">
+        <table class="detail-table">
+          <thead>
+            <tr>
+              <th>Scenario</th>
+              <th>Left</th>
+              <th>Right</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${changed
+              .slice(0, 16)
+              .map((scenarioId) => `
+                <tr>
+                  <td><strong>${escapeHtml(scenarioId)}</strong></td>
+                  <td>${scenarioOutcomeLabel(leftScenarios[scenarioId])}</td>
+                  <td>${scenarioOutcomeLabel(rightScenarios[scenarioId])}</td>
+                </tr>
+              `)
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 function renderHistoryDetail(payload) {
@@ -1951,7 +2327,7 @@ function setHistoryDetailRow(recordId, title, chipText, chipKind, bodyHtml) {
   detailRow.className = "history-detail-row";
   detailRow.dataset.historyDetailFor = recordId;
   detailRow.innerHTML = `
-    <td colspan="7">
+    <td colspan="8">
       <div class="history-detail">
         <div class="history-detail-heading">
           <div>
@@ -2219,7 +2595,7 @@ function renderFatalError(error) {
   document.getElementById("scenario-table-body").innerHTML =
     `<tr><td colspan="8" class="empty-cell">Dashboard API error</td></tr>`;
   document.getElementById("history-table-body").innerHTML =
-    `<tr><td colspan="7" class="empty-cell">Dashboard API error</td></tr>`;
+    `<tr><td colspan="8" class="empty-cell">Dashboard API error</td></tr>`;
 }
 
 function renderTags(tags) {
@@ -2256,6 +2632,48 @@ function historyViolationCell(record) {
     return `<span class="token good">clear</span>`;
   }
   return `<span class="token danger">${record.violation_total} total</span>`;
+}
+
+function gateLabel(record) {
+  return record.quality_gate_passed ? "PASS" : "FAIL";
+}
+
+function reportModuleLatency(report) {
+  if (report?.module_latency_ms) {
+    return report.module_latency_ms;
+  }
+  return report?.summary?.module_latency_ms || {};
+}
+
+function deltaNumber(value, suffix) {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatNumber(value)}${suffix}`;
+}
+
+function scenarioResultMap(scenarios) {
+  return scenarios.reduce((accumulator, scenario) => {
+    const actual = scenario.actual || {};
+    accumulator[scenario.id || scenario.name || "unknown"] = {
+      passed: Boolean(scenario.passed),
+      move: actual.final_move || "--",
+      stum: actual.stum_gate || "--",
+      route: actual.route_strategy || "--",
+      violations: actual.violations || [],
+    };
+    return accumulator;
+  }, {});
+}
+
+function scenarioOutcomeLabel(outcome) {
+  if (!outcome) {
+    return `<span class="status-pill neutral">MISSING</span>`;
+  }
+  return `
+    <span class="status-pill ${outcome.passed ? "pass" : "fail"}">
+      ${outcome.passed ? "PASS" : "FAIL"}
+    </span>
+    <span class="muted">${escapeHtml(outcome.move)} / ${escapeHtml(outcome.route)}</span>
+  `;
 }
 
 function countBy(records, key) {
