@@ -8,7 +8,7 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Origami Artifact Dashboard</title>
-    <link rel="stylesheet" href="/dashboard/static/dashboard.css?v=lab-history-v1" />
+    <link rel="stylesheet" href="/dashboard/static/dashboard.css?v=observability-link-v1" />
   </head>
   <body>
     <div class="app-shell">
@@ -18,6 +18,15 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
           <h1>Artifact Dashboard</h1>
         </div>
         <div class="topbar-actions">
+          <a
+            id="observability-button"
+            class="action-button"
+            href="http://127.0.0.1:3000/d/origami-overview?orgId=1"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Observability
+          </a>
           <button id="refresh-button" class="action-button" type="button">
             Refresh
           </button>
@@ -683,6 +692,6 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
       </main>
     </div>
 
-    <script src="/dashboard/static/dashboard.js?v=lab-history-v1"></script>
+    <script src="/dashboard/static/dashboard.js?v=observability-link-v1"></script>
   </body>
 </html>

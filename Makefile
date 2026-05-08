@@ -25,7 +25,7 @@ dashboard:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m uvicorn origami.api.app:app --host 127.0.0.1 --port 8000
 
 observability:
-	docker compose up api prometheus
+	docker compose up api prometheus grafana
 
 quality: lint test scenario benchmark audit-verify
 

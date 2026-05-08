@@ -1,0 +1,13 @@
+# 中文：Grafana datasource provisioning，将本地 Prometheus 注册为默认数据源。
+# English: Grafana datasource provisioning registering local Prometheus as the default datasource.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true

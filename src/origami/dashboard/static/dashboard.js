@@ -17,6 +17,7 @@ const ENDPOINTS = {
   runScenarioById: (scenarioId) => `/runs/scenario/${encodeURIComponent(scenarioId)}`,
   runBenchmark: "/runs/benchmark",
 };
+const GRAFANA_DASHBOARD_PATH = "/d/origami-overview?orgId=1";
 
 const ACTION_BUTTON_IDS = [
   "run-scenario-button",
@@ -89,6 +90,7 @@ let historyCompareIds = [];
 const historyDetailCache = new Map();
 
 document.addEventListener("DOMContentLoaded", () => {
+  registerObservabilityLinks();
   registerTabs();
   registerActionButtons();
   registerTestLab();
@@ -98,6 +100,14 @@ document.addEventListener("DOMContentLoaded", () => {
   renderScenarioDraftAssist();
   loadDashboard();
 });
+
+function registerObservabilityLinks() {
+  const button = document.getElementById("observability-button");
+  if (!button) {
+    return;
+  }
+  button.href = `${window.location.protocol}//${window.location.hostname}:3000${GRAFANA_DASHBOARD_PATH}`;
+}
 
 async function loadDashboard() {
   try {

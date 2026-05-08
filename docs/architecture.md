@@ -70,7 +70,7 @@ make quality
 make dashboard
 ```
 
-Open `http://127.0.0.1:8000/dashboard`. The page can save custom scenario YAML, trigger a new scenario run, trigger a new benchmark run, or refresh the current artifact view. Runs triggered through the dashboard are appended to `artifacts/history/runs.jsonl`, with full snapshots under `artifacts/history/scenario/` and `artifacts/history/benchmark/`.
+Open `http://127.0.0.1:8000/dashboard`. The page can save custom scenario YAML, trigger a new scenario run, trigger a new benchmark run, open the Grafana observability dashboard in a new tab, or refresh the current artifact view. Runs triggered through the dashboard are appended to `artifacts/history/runs.jsonl`, with full snapshots under `artifacts/history/scenario/` and `artifacts/history/benchmark/`.
 
 The dashboard reads:
 
@@ -97,3 +97,21 @@ Useful metric families:
 - `origami_run_module_latency_ms`: latest per-module latency stats.
 - `origami_scenario_pass_rate`, `origami_scenario_cases`, `origami_scenario_violation_count`: latest scenario outcome metrics.
 - `origami_benchmark_steps`, `origami_benchmark_audit_valid`: latest benchmark run metrics.
+
+Prometheus also loads alert rules from `configs/observability/rules/*.yml`. The default rule set covers API scrape health, 5xx errors, API p95 latency, scenario gate failures, benchmark gate failures, scenario pass-rate drops, and module p95 latency regressions. Active alerts are visible at `http://127.0.0.1:9090/alerts`.
+
+## Grafana Provisioning
+
+Grafana is part of the local observability compose stack. It provisions:
+
+- `configs/observability/grafana/provisioning/datasources/prometheus.yml`: Prometheus datasource with UID `prometheus`.
+- `configs/observability/grafana/provisioning/dashboards/dashboards.yml`: dashboard provider for mounted JSON dashboards.
+- `configs/observability/grafana/dashboards/origami-overview.json`: overview dashboard for API traffic, p95 latency, scenario gates, benchmark gates, pass rates, violations, and module latency.
+
+Run it with:
+
+```bash
+make observability
+```
+
+Open `http://127.0.0.1:3000/d/origami-overview`. Anonymous admin access is enabled for local development only.

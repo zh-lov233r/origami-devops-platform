@@ -29,15 +29,17 @@ make quality
 make dashboard
 ```
 
-Open `http://127.0.0.1:8000/dashboard`. The dashboard can build custom scenarios, refresh artifacts, trigger scenario or benchmark runs, and show run history from the page.
+Open `http://127.0.0.1:8000/dashboard`. The dashboard can build custom scenarios, refresh artifacts, trigger scenario or benchmark runs, show run history, and open the provisioned Grafana observability dashboard in a new tab.
 
-Expose Prometheus metrics locally:
+Run the local observability stack:
 
 ```bash
 make observability
 ```
 
-Prometheus will scrape the API at `http://api:8000/metrics` from inside Docker. Open `http://127.0.0.1:9090` for the Prometheus UI, or hit `http://127.0.0.1:8000/metrics` directly for the API metrics payload.
+Prometheus will scrape the API at `http://api:8000/metrics` from inside Docker. Open `http://127.0.0.1:9090` for the Prometheus UI, `http://127.0.0.1:3000/d/origami-overview` for the provisioned Grafana dashboard, or hit `http://127.0.0.1:8000/metrics` directly for the API metrics payload.
+
+The Prometheus stack also loads local alert rules for API availability, 5xx errors, p95 latency, scenario gate failures, benchmark gate failures, pass-rate drops, and module latency regressions. Open `http://127.0.0.1:9090/alerts` to inspect active alerts.
 
 ## Target Workflow
 

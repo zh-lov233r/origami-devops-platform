@@ -12,8 +12,12 @@ src/origami/cli/main.py
 src/origami/core/__init__.py
 src/origami/core/config.py
 src/origami/core/pipeline.py
+src/origami/dashboard/__init__.py
 src/origami/edge/__init__.py
 src/origami/edge/mock_runtime.py
+src/origami/evaluation/__init__.py
+src/origami/evaluation/scenario_builder.py
+src/origami/evaluation/scenario_runner.py
 src/origami/export/__init__.py
 src/origami/export/onnx_export.py
 src/origami/models/__init__.py
@@ -31,6 +35,12 @@ src/origami/models/stum/__init__.py
 src/origami/models/stum/gate.py
 src/origami/observability/__init__.py
 src/origami/observability/events.py
+src/origami/observability/metrics.py
+src/origami/persistence/__init__.py
+src/origami/persistence/artifact_store.py
+src/origami/persistence/run_history.py
+src/origami/visualization/__init__.py
+src/origami/visualization/amdc_drift_plot.py
 src/origami_devops_platform.egg-info/PKG-INFO
 src/origami_devops_platform.egg-info/SOURCES.txt
 src/origami_devops_platform.egg-info/dependency_links.txt

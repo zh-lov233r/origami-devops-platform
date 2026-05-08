@@ -1,5 +1,6 @@
 fastapi>=0.115
 gymnasium>=1.0
+matplotlib>=3.9
 networkx>=3.3
 numpy>=2.0
 onnxruntime>=1.19

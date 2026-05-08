@@ -5,6 +5,7 @@ Summary: Local-first mini PIC 2.0 DevOps platform scaffold
 Requires-Python: >=3.11
 Requires-Dist: fastapi>=0.115
 Requires-Dist: gymnasium>=1.0
+Requires-Dist: matplotlib>=3.9
 Requires-Dist: networkx>=3.3
 Requires-Dist: numpy>=2.0
 Requires-Dist: onnxruntime>=1.19

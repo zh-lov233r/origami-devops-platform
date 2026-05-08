@@ -1,0 +1,15 @@
+# 中文：Grafana dashboard provisioning，从挂载目录加载 Origami dashboard。
+# English: Grafana dashboard provisioning loading Origami dashboards from the mounted directory.
+
+apiVersion: 1
+
+providers:
+  - name: Origami
+    orgId: 1
+    folder: Origami
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

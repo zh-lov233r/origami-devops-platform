@@ -54,6 +54,8 @@ def test_dashboard_page_file_is_served() -> None:
     assert 'data-tab-target="scenario-builder"' in dashboard_path.read_text()
     assert 'data-tab-target="test-lab"' in dashboard_path.read_text()
     assert 'data-tab-target="run-history"' in dashboard_path.read_text()
+    assert 'id="observability-button"' in dashboard_path.read_text()
+    assert "http://127.0.0.1:3000/d/origami-overview?orgId=1" in dashboard_path.read_text()
     assert "Scenario Manager" in dashboard_path.read_text()
     assert "Test Lab" in dashboard_path.read_text()
     assert "Run Scenarios and Benchmarks" in dashboard_path.read_text()
