@@ -94,7 +94,12 @@ def _run_case(case: dict[str, Any]) -> dict[str, Any]:
     pipeline = PIC2Pipeline(run_id=scenario_id)
     result = pipeline.step(case["observation"])
     actual = _extract_actual(result)
-    checks = _evaluate_expected(case.get("expected", {}), actual)
+    expected = case.get("expected", {})
+    violation_analysis = _violation_analysis(expected, actual)
+    checks = _evaluate_expected(expected, actual)
+    safety_signal_check = _safety_signal_check(violation_analysis)
+    if safety_signal_check is not None:
+        checks.append(safety_signal_check)
     passed = all(check["passed"] for check in checks)
     return {
         "id": scenario_id,
@@ -104,6 +109,7 @@ def _run_case(case: dict[str, Any]) -> dict[str, Any]:
         "passed": passed,
         "checks": checks,
         "actual": actual,
+        "violation_analysis": violation_analysis,
         "latency_ms": {event.module: event.latency_ms for event in result.events},
         "event_records": _event_records(scenario_id, result),
         "audit_records": _audit_records(scenario_id, pipeline),
@@ -194,6 +200,56 @@ def _check_list_expectation(key: str, expected_value: Any, actual_value: Any) ->
     return all(item in actual_items for item in expected_items)
 
 
+def _violation_analysis(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
+    expected_violations = set(_list_items(expected.get("expected_violations", [])))
+    actual_violations = set(_list_items(actual.get("violations", [])))
+    unexpected = actual_violations - expected_violations
+    missing = expected_violations - actual_violations
+
+    if unexpected and missing:
+        status = "mixed"
+    elif unexpected:
+        status = "unexpected"
+    elif missing:
+        status = "missing"
+    elif expected_violations:
+        status = "expected"
+    else:
+        status = "none"
+
+    return {
+        "status": status,
+        "expected": sorted(expected_violations),
+        "actual": sorted(actual_violations),
+        "unexpected": sorted(unexpected),
+        "missing": sorted(missing),
+    }
+
+
+def _list_items(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return [str(value)]
+
+
+def _safety_signal_check(analysis: dict[str, Any]) -> dict[str, Any] | None:
+    status = str(analysis.get("status", "none"))
+    if status not in {"unexpected", "missing", "mixed"}:
+        return None
+    return {
+        "name": "safety_signals",
+        "passed": False,
+        "expected": "none or expected violations only",
+        "actual": {
+            "status": status,
+            "unexpected": analysis.get("unexpected", []),
+            "missing": analysis.get("missing", []),
+        },
+    }
+
+
 def _build_report(scenario_results: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(scenario_results)
     passed = sum(1 for result in scenario_results if result["passed"])
@@ -212,6 +268,7 @@ def _build_report(scenario_results: list[dict[str, Any]]) -> dict[str, Any]:
             "final_move_counts": _count_actual(scenario_results, "final_move"),
             "fleet_adjustment_counts": _count_actual(scenario_results, "fleet_adjustment"),
             "violation_counts": _count_list_actual(scenario_results, "violations"),
+            "violation_status_counts": _count_violation_statuses(scenario_results),
             "module_latency_ms": latencies,
         },
         "scenarios": [_report_scenario(result) for result in scenario_results],
@@ -285,19 +342,22 @@ def _markdown_report(report: dict[str, Any]) -> str:
         f"- Generated at: `{report['generated_at']}`",
         f"- Quality gate: `{'PASS' if report['quality_gate_passed'] else 'FAIL'}`",
         f"- Pass rate: `{report['passed']}/{report['total']} ({report['pass_rate']:.0%})`",
+        f"- Safety signals: `{summary['violation_status_counts']}`",
         "",
         "## Scenario Results",
         "",
-        "| Scenario | Result | Final Move | STUM | Route | SEOM | Fleet | Violations |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Scenario | Result | Safety Signals | Final Move | STUM | Route | SEOM | Fleet | Violations |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for scenario in report["scenarios"]:
         actual = scenario["actual"]
         violations = ", ".join(actual.get("violations", [])) or "-"
+        violation_status = scenario.get("violation_analysis", {}).get("status", "none")
         result = "PASS" if scenario["passed"] else "FAIL"
         lines.append(
             "| "
-            f"`{scenario['id']}` | `{result}` | `{actual.get('final_move')}` | "
+            f"`{scenario['id']}` | `{result}` | `{violation_status}` | "
+            f"`{actual.get('final_move')}` | "
             f"`{actual.get('stum_gate')}` | `{actual.get('route_strategy')}` | "
             f"`{actual.get('seom_passed')}` | `{actual.get('fleet_adjustment')}` | "
             f"{violations} |"
@@ -327,6 +387,7 @@ def _markdown_report(report: dict[str, Any]) -> str:
             f"- STUM gates: `{summary['stum_gate_counts']}`",
             f"- Fleet adjustments: `{summary['fleet_adjustment_counts']}`",
             f"- Violations: `{summary['violation_counts']}`",
+            f"- Safety signal status: `{summary['violation_status_counts']}`",
             "",
         ]
     )
@@ -368,6 +429,14 @@ def _count_list_actual(scenario_results: list[dict[str, Any]], key: str) -> dict
     for result in scenario_results:
         for item in result["actual"].get(key, []):
             counter[str(item)] += 1
+    return dict(sorted(counter.items()))
+
+
+def _count_violation_statuses(scenario_results: list[dict[str, Any]]) -> dict[str, int]:
+    counter = Counter(
+        str(result.get("violation_analysis", {}).get("status", "none"))
+        for result in scenario_results
+    )
     return dict(sorted(counter.items()))
 
 

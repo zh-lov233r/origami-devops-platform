@@ -1439,7 +1439,7 @@ function deriveOverallGate(scenarioPayload, benchmarkPayload, auditPayload) {
 function renderScenarioTable(report) {
   const tableBody = document.getElementById("scenario-table-body");
   if (!report?.scenarios?.length) {
-    tableBody.innerHTML = `<tr><td colspan="8" class="empty-cell">No scenario artifact</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="9" class="empty-cell">No scenario artifact</td></tr>`;
     return;
   }
 
@@ -1464,6 +1464,7 @@ function renderScenarioTable(report) {
           <td>${escapeHtml(actual.route_strategy || "--")}</td>
           <td><span class="status-pill ${seomKind}">${actual.seom_passed ? "PASS" : "BLOCK"}</span></td>
           <td>${escapeHtml(actual.fleet_adjustment || "--")}</td>
+          <td>${renderViolationStatus(scenario.violation_analysis)}</td>
           <td>${renderViolationTokens(violations)}</td>
         </tr>
       `;
@@ -1827,6 +1828,7 @@ function renderTestLabScenarioRows(scenarios) {
             <th>Move</th>
             <th>STUM</th>
             <th>Route</th>
+            <th>Safety</th>
             <th>Violations</th>
           </tr>
         </thead>
@@ -1851,6 +1853,7 @@ function renderTestLabScenarioRows(scenarios) {
                   <td>${escapeHtml(actual.final_move || "--")}</td>
                   <td>${escapeHtml(actual.stum_gate || "--")}</td>
                   <td>${escapeHtml(actual.route_strategy || "--")}</td>
+                  <td>${renderViolationStatus(scenario.violation_analysis)}</td>
                   <td>${renderViolationTokens(actual.violations || [])}</td>
                 </tr>
               `;
@@ -2511,6 +2514,7 @@ function renderHistoryScenarioRows(scenarios) {
             <th>STUM</th>
             <th>Route</th>
             <th>Fleet</th>
+            <th>Safety</th>
             <th>Violations</th>
           </tr>
         </thead>
@@ -2535,6 +2539,7 @@ function renderHistoryScenarioRows(scenarios) {
                   <td>${escapeHtml(actual.stum_gate || "--")}</td>
                   <td>${escapeHtml(actual.route_strategy || "--")}</td>
                   <td>${escapeHtml(actual.fleet_adjustment || "--")}</td>
+                  <td>${renderViolationStatus(scenario.violation_analysis)}</td>
                   <td>${renderViolationTokens(actual.violations || [])}</td>
                 </tr>
               `;
@@ -2603,7 +2608,7 @@ function renderFatalError(error) {
   setPill("overall-gate", "ERROR", "fail");
   setText("generated-at", error.message);
   document.getElementById("scenario-table-body").innerHTML =
-    `<tr><td colspan="8" class="empty-cell">Dashboard API error</td></tr>`;
+    `<tr><td colspan="9" class="empty-cell">Dashboard API error</td></tr>`;
   document.getElementById("history-table-body").innerHTML =
     `<tr><td colspan="8" class="empty-cell">Dashboard API error</td></tr>`;
 }
@@ -2622,6 +2627,19 @@ function renderViolationTokens(violations) {
     return `<span class="token good">clear</span>`;
   }
   return violations.map((violation) => `<span class="token danger">${escapeHtml(violation)}</span>`).join(" ");
+}
+
+function renderViolationStatus(analysis) {
+  const status = analysis?.status || "none";
+  const metadata = {
+    none: ["NONE", "pass"],
+    expected: ["EXPECTED", "info"],
+    unexpected: ["UNEXPECTED", "fail"],
+    missing: ["MISSING", "fail"],
+    mixed: ["MIXED", "fail"],
+  };
+  const [label, kind] = metadata[status] || [status.toUpperCase(), "neutral"];
+  return `<span class="status-pill ${kind}">${escapeHtml(label)}</span>`;
 }
 
 function historyScope(record) {

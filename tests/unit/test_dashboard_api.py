@@ -68,6 +68,7 @@ def test_dashboard_page_file_is_served() -> None:
     assert "Expected" in dashboard_path.read_text()
     assert "Fleet" in dashboard_path.read_text()
     assert "Run Queue" in dashboard_path.read_text()
+    assert "Safety Signals" in dashboard_path.read_text()
     assert "Search Runs" in dashboard_path.read_text()
     assert "Compare Runs" in dashboard_path.read_text()
     assert "Clear Filters" in dashboard_path.read_text()
