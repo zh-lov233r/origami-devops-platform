@@ -31,6 +31,14 @@ make dashboard
 
 Open `http://127.0.0.1:8000/dashboard`. The dashboard can build custom scenarios, refresh artifacts, trigger scenario or benchmark runs, and show run history from the page.
 
+Expose Prometheus metrics locally:
+
+```bash
+make observability
+```
+
+Prometheus will scrape the API at `http://api:8000/metrics` from inside Docker. Open `http://127.0.0.1:9090` for the Prometheus UI, or hit `http://127.0.0.1:8000/metrics` directly for the API metrics payload.
+
 ## Target Workflow
 
 ```text

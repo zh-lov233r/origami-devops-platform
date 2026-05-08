@@ -8,10 +8,11 @@ from __future__ import annotations
 import json
 from json import JSONDecodeError
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from origami.benchmark.runner import (
@@ -32,6 +33,13 @@ from origami.evaluation.scenario_runner import (
     run_default_scenario_suite,
     run_scenario_case,
 )
+from origami.observability.metrics import (
+    PROMETHEUS_CONTENT_TYPE,
+    record_benchmark_report,
+    record_http_request,
+    record_scenario_report,
+    render_metrics,
+)
 from origami.persistence.run_history import RunHistoryStore
 
 app = FastAPI(title="Origami Mini PIC 2.0 DevOps Platform")
@@ -49,10 +57,18 @@ app.mount(
 
 @app.middleware("http")
 async def no_cache_dashboard_assets(request: Any, call_next: Any) -> Any:
-    response = await call_next(request)
-    if request.url.path == "/dashboard" or request.url.path.startswith("/dashboard/static/"):
-        response.headers["Cache-Control"] = "no-store"
-    return response
+    started_at = perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        if request.url.path == "/dashboard" or request.url.path.startswith("/dashboard/static/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+    finally:
+        route_path = _route_path(request)
+        elapsed = perf_counter() - started_at
+        record_http_request(request.method, route_path, status_code, elapsed)
 
 
 @app.get("/health")
@@ -63,6 +79,11 @@ def health() -> dict[str, str]:
 @app.get("/api/health")
 def api_health() -> dict[str, str]:
     return health()
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics() -> Response:
+    return Response(render_metrics(), media_type=PROMETHEUS_CONTENT_TYPE)
 
 
 @app.get("/dashboard", include_in_schema=False)
@@ -151,6 +172,7 @@ def smoke_run() -> dict[str, object]:
 def scenario_run() -> dict[str, Any]:
     report = run_default_scenario_suite()
     report["history_record"] = RUN_HISTORY.record("scenario", report)
+    record_scenario_report(report, scope="suite")
     return report
 
 
@@ -159,6 +181,7 @@ def scenario_run_one(scenario_id: str) -> dict[str, Any]:
     try:
         report = run_scenario_case(scenario_id)
         report["history_record"] = RUN_HISTORY.record("scenario", report)
+        record_scenario_report(report, scope=report.get("scenario", {}).get("id", scenario_id))
         return report
     except ValueError as exc:
         raise _scenario_http_error(exc) from exc
@@ -168,12 +191,18 @@ def scenario_run_one(scenario_id: str) -> dict[str, Any]:
 def benchmark_run() -> dict[str, object]:
     report = run_default_latency_benchmark()
     report["history_record"] = RUN_HISTORY.record("benchmark", report)
+    record_benchmark_report(report)
     return report
 
 
 @app.post("/benchmarks/latency")
 def latency_benchmark() -> dict[str, object]:
     return run_latency_benchmark()
+
+
+def _route_path(request: Any) -> str:
+    route = request.scope.get("route")
+    return str(getattr(route, "path", request.url.path))
 
 
 def _read_json_artifact(path: Path) -> dict[str, Any]:

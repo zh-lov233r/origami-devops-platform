@@ -18,6 +18,7 @@ from origami.api.app import (
     scenario_configs,
     scenario_audit,
     scenario_events,
+    metrics,
     scenario_run,
     scenario_run_one,
     scenario_update,
@@ -40,6 +41,7 @@ def test_dashboard_routes_are_registered() -> None:
     assert "/runs/scenario" in route_paths
     assert "/runs/scenario/{scenario_id}" in route_paths
     assert "/runs/benchmark" in route_paths
+    assert "/metrics" in route_paths
 
 
 def test_dashboard_page_file_is_served() -> None:
@@ -90,6 +92,23 @@ def test_dashboard_jsonl_endpoints_return_record_payloads() -> None:
     assert {"available", "path", "count", "records"} <= set(audit_payload)
     assert len(events_payload["records"]) <= 5
     assert len(audit_payload["records"]) <= 5
+
+
+def test_metrics_endpoint_exposes_prometheus_payload() -> None:
+    scenario_run_one("normal_delivery")
+    benchmark_run()
+
+    response = metrics()
+    body = response.body.decode()
+
+    assert response.media_type.startswith("text/plain")
+    assert "origami_app_info" in body
+    assert "origami_http_requests_total" in body
+    assert "origami_http_request_duration_seconds" in body
+    assert 'origami_run_quality_gate{run_type="scenario",scope="normal_delivery"} 1.0' in body
+    assert 'origami_scenario_pass_rate{scope="normal_delivery",suite="carry_go"} 1.0' in body
+    assert 'origami_run_quality_gate{run_type="benchmark",scope="default"} 1.0' in body
+    assert 'origami_benchmark_steps{scope="default"} 20.0' in body
 
 
 def test_dashboard_run_actions_write_reports() -> None:

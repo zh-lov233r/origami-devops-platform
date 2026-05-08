@@ -83,3 +83,17 @@ The dashboard reads:
 - `POST /api/scenarios`
 - `POST /runs/scenario`
 - `POST /runs/benchmark`
+
+## Prometheus Metrics
+
+FastAPI exposes Prometheus text metrics at `GET /metrics`. The local compose stack runs Prometheus with `configs/observability/prometheus.yml`, which scrapes the API service on port 8000.
+
+Useful metric families:
+
+- `origami_http_requests_total`: API request count by method, route path, and status.
+- `origami_http_request_duration_seconds`: API request latency histogram by method and route path.
+- `origami_run_quality_gate`: latest scenario or benchmark gate status.
+- `origami_run_max_module_p95_ms`: latest maximum module p95 latency for scenario and benchmark runs.
+- `origami_run_module_latency_ms`: latest per-module latency stats.
+- `origami_scenario_pass_rate`, `origami_scenario_cases`, `origami_scenario_violation_count`: latest scenario outcome metrics.
+- `origami_benchmark_steps`, `origami_benchmark_audit_valid`: latest benchmark run metrics.

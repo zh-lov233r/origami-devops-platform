@@ -4,7 +4,7 @@
 PYTHONPATH ?= src
 PYTHON ?= .venv/bin/python
 
-.PHONY: lint smoke scenario test benchmark dashboard quality export edge-mock audit-verify
+.PHONY: lint smoke scenario test benchmark dashboard observability quality export edge-mock audit-verify
 
 lint:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m ruff check src tests
@@ -23,6 +23,9 @@ benchmark:
 
 dashboard:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m uvicorn origami.api.app:app --host 127.0.0.1 --port 8000
+
+observability:
+	docker compose up api prometheus
 
 quality: lint test scenario benchmark audit-verify
 
