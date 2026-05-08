@@ -64,6 +64,16 @@ groups:
           summary: Scenario pass rate dropped below 100%
           description: At least one scenario scope has a pass rate below 100%.
 
+      - alert: OrigamiScenarioSafetySignalMismatch
+        expr: sum by (scope, suite) (origami_scenario_safety_signal_cases{status=~"unexpected|missing|mixed"}) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: origami-scenario
+        annotations:
+          summary: Scenario safety signals do not match expectations
+          description: The latest scenario run produced unexpected, missing, or mixed safety signal statuses.
+
       - alert: OrigamiModuleP95High
         expr: max(origami_run_max_module_p95_ms) > 50
         for: 2m

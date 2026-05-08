@@ -110,6 +110,14 @@ def test_metrics_endpoint_exposes_prometheus_payload() -> None:
     assert "origami_http_request_duration_seconds" in body
     assert 'origami_run_quality_gate{run_type="scenario",scope="normal_delivery"} 1.0' in body
     assert 'origami_scenario_pass_rate{scope="normal_delivery",suite="carry_go"} 1.0' in body
+    assert (
+        'origami_scenario_safety_signal_cases{'
+        'scope="normal_delivery",status="none",suite="carry_go"} 1.0'
+    ) in body
+    assert (
+        'origami_scenario_safety_signal_cases{'
+        'scope="normal_delivery",status="unexpected",suite="carry_go"} 0.0'
+    ) in body
     assert 'origami_run_quality_gate{run_type="benchmark",scope="default"} 1.0' in body
     assert 'origami_benchmark_steps{scope="default"} 20.0' in body
 

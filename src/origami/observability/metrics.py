@@ -19,6 +19,7 @@ from prometheus_client import (
 
 METRICS_REGISTRY = CollectorRegistry()
 PROMETHEUS_CONTENT_TYPE = CONTENT_TYPE_LATEST
+SAFETY_SIGNAL_STATUSES = ("none", "expected", "unexpected", "missing", "mixed")
 
 HTTP_REQUESTS_TOTAL = Counter(
     "origami_http_requests_total",
@@ -75,6 +76,12 @@ SCENARIO_VIOLATION_COUNT = Gauge(
     ("scope", "suite"),
     registry=METRICS_REGISTRY,
 )
+SCENARIO_SAFETY_SIGNAL_CASES = Gauge(
+    "origami_scenario_safety_signal_cases",
+    "Latest scenario case counts by safety signal status.",
+    ("scope", "suite", "status"),
+    registry=METRICS_REGISTRY,
+)
 BENCHMARK_STEPS = Gauge(
     "origami_benchmark_steps",
     "Latest benchmark step count.",
@@ -121,6 +128,11 @@ def record_scenario_report(report: dict[str, Any], scope: str = "suite") -> None
             _float_value(report.get(result)),
         )
     SCENARIO_VIOLATION_COUNT.labels(scope=scope, suite=suite).set(_violation_count(report))
+    safety_signal_counts = _safety_signal_counts(report)
+    for status in SAFETY_SIGNAL_STATUSES:
+        SCENARIO_SAFETY_SIGNAL_CASES.labels(scope=scope, suite=suite, status=status).set(
+            _float_value(safety_signal_counts.get(status)),
+        )
     _record_module_latency("scenario", scope, report)
 
 
@@ -179,6 +191,43 @@ def _violation_count(report: dict[str, Any]) -> float:
     if not isinstance(violation_counts, dict):
         return 0.0
     return sum(_float_value(count) for count in violation_counts.values())
+
+
+def _safety_signal_counts(report: dict[str, Any]) -> dict[str, float]:
+    summary = report.get("summary", {})
+    status_counts = (
+        summary.get("violation_status_counts", {})
+        if isinstance(summary, dict)
+        else {}
+    )
+    if isinstance(status_counts, dict) and status_counts:
+        return {
+            str(status): _float_value(count)
+            for status, count in status_counts.items()
+        }
+
+    scenarios = report.get("scenarios")
+    if isinstance(scenarios, list):
+        return _count_safety_signal_statuses(scenarios)
+
+    scenario = report.get("scenario")
+    if isinstance(scenario, dict):
+        return _count_safety_signal_statuses([scenario])
+
+    return {}
+
+
+def _count_safety_signal_statuses(scenarios: list[Any]) -> dict[str, float]:
+    counts = {status: 0.0 for status in SAFETY_SIGNAL_STATUSES}
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            continue
+        analysis = scenario.get("violation_analysis", {})
+        status = "none"
+        if isinstance(analysis, dict):
+            status = str(analysis.get("status") or "none")
+        counts[status] = counts.get(status, 0.0) + 1.0
+    return counts
 
 
 def _bool_value(value: Any) -> float:
