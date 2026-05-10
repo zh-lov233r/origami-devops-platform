@@ -4,7 +4,7 @@
 PYTHONPATH ?= src
 PYTHON ?= .venv/bin/python
 
-.PHONY: lint smoke scenario test benchmark dashboard observability quality export edge-mock audit-verify
+.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify
 
 lint:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m ruff check src tests
@@ -14,6 +14,9 @@ smoke:
 
 scenario:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m origami.cli.main scenario
+
+multistep-scenario:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m origami.cli.main multistep-scenario
 
 test:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m pytest
@@ -26,6 +29,9 @@ dashboard:
 
 observability:
 	docker compose up api prometheus grafana
+
+observability-build:
+	docker compose build api
 
 quality: lint test scenario benchmark audit-verify
 

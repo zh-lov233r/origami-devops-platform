@@ -39,6 +39,30 @@ The runner writes these default artifacts:
 - `artifacts/events/scenario_events.jsonl`: per-module latency events
 - `artifacts/audit/scenario_audit.jsonl`: tamper-evident audit chain entries
 
+## Multi-Step Scenarios
+
+Multi-step scenarios live in `configs/multistep_scenarios/` and run one
+`PIC2Pipeline` across a timeline. Each step inherits the previous observation,
+optionally advances position from the previous action, applies an
+`observation_patch`, and evaluates that step's `expected` assertions.
+
+Run them locally with:
+
+```bash
+.venv/bin/python -m origami.cli.main multistep-scenario
+```
+
+The default example, `delivery_low_battery_return`, starts a delivery, advances
+through normal route progress, then drops battery below the return threshold and
+expects `return_to_dock`, `battery_abort`, and `low_battery` signals.
+
+The runner writes:
+
+- `artifacts/reports/multistep_scenario_report.json`
+- `artifacts/reports/multistep_scenario_report.md`
+- `artifacts/events/multistep_scenario_events.jsonl`
+- `artifacts/audit/multistep_scenario_audit.jsonl`
+
 ## Scenario Builder
 
 The dashboard can save custom Carry & Go YAML scenarios into `configs/scenarios/` through `POST /api/scenarios`. The builder writes the same schema as the hand-authored scenarios:

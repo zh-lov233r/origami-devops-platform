@@ -3,11 +3,13 @@
 
 services:
   api:
-    image: python:3.11-slim
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: origami-devops-platform-api:local
     init: true
     working_dir: /workspace
-    command: >
-      sh -c "pip install --no-cache-dir -e . && python -m origami.api.app"
+    command: ["python", "-m", "origami.api.app"]
     environment:
       PYTHONPATH: /workspace/src
     ports:

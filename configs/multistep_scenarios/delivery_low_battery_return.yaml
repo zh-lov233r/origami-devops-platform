@@ -1,0 +1,97 @@
+# 中文：多步配送场景，模拟机器人配送途中电量下降并切换为返航。
+# English: Multi-step delivery scenario simulating a mid-route low-battery return.
+
+version: 1
+id: delivery_low_battery_return
+name: Delivery Low Battery Return Timeline
+description: Robot starts a delivery, makes progress, then switches to return-to-dock when battery falls.
+tags:
+  - multistep
+  - delivery
+  - energy
+  - return_to_dock
+
+initial_observation:
+  mission_type: carry_go_delivery
+  position: [0, 0]
+  target: [6, 0]
+  dock_position: [0, 0]
+  sensor_bias: 0.01
+  payload_loaded: true
+  payload_kg: 2.0
+  payload_locked: true
+  battery_pct: 80.0
+  nearest_human_distance_m: 2.0
+  current_subtask: navigate_to_dropoff
+  fleet_context:
+    nearby_robots: 0
+
+steps:
+  - step: depart
+    name: Depart pickup
+    at_s: 0
+    expected:
+      final_move: east
+      seom_passed: true
+      audit_valid: true
+      route_strategy: normal
+      required_absent_violations: [C07_battery_return_15pct]
+
+  - step: en_route
+    name: En route progress
+    at_s: 60
+    observation_patch:
+      battery_pct: 55.0
+    expected:
+      final_move: east
+      seom_passed: true
+      audit_valid: true
+      route_strategy: normal
+
+  - step: battery_warning
+    name: Battery warning
+    at_s: 120
+    observation_patch:
+      battery_pct: 18.0
+    expected:
+      final_move: east
+      seom_passed: true
+      audit_valid: true
+      route_strategy: normal
+
+  - step: return_required
+    name: Return required
+    at_s: 180
+    observation_patch:
+      battery_pct: 10.0
+    expected:
+      final_move: return_to_dock
+      max_final_speed_mps: 0.3
+      seom_passed: true
+      audit_valid: true
+      route_strategy: safe_halt_or_return
+      expected_replan_reasons: [battery_abort]
+      expected_recovery_actions: [return_to_dock, notify_operator]
+      expected_grpo_risk_flags: [low_battery]
+      required_absent_violations: [C07_battery_return_15pct]
+
+  - step: returning
+    name: Returning to dock
+    at_s: 240
+    observation_patch:
+      battery_pct: 8.0
+    expected:
+      final_move: return_to_dock
+      max_final_speed_mps: 0.3
+      seom_passed: true
+      audit_valid: true
+      route_strategy: safe_halt_or_return
+      expected_replan_reasons: [battery_abort]
+      expected_grpo_risk_flags: [low_battery]
+
+expected:
+  final_move: return_to_dock
+  seom_passed: true
+  audit_valid: true
+  route_strategy: safe_halt_or_return
+  expected_replan_reasons: [battery_abort]

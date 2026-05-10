@@ -14,6 +14,10 @@ from origami.benchmark.runner import DEFAULT_BENCHMARK_REPORT_PATH, run_latency_
 from origami.core.pipeline import PIC2Pipeline
 from origami.edge.mock_runtime import run_edge_mock
 from origami.evaluation.scenario_runner import DEFAULT_REPORT_PATH, run_scenario_suite
+from origami.evaluation.multistep_runner import (
+    DEFAULT_MULTISTEP_REPORT_PATH,
+    run_multistep_suite,
+)
 from origami.export.onnx_export import export_placeholder
 
 
@@ -66,7 +70,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="origami")
     parser.add_argument(
         "command",
-        choices=["smoke", "scenario", "benchmark", "export", "edge-mock", "audit-verify"],
+        choices=[
+            "smoke",
+            "scenario",
+            "multistep-scenario",
+            "benchmark",
+            "export",
+            "edge-mock",
+            "audit-verify",
+        ],
         help="Platform command to run.",
     )
     parser.add_argument(
@@ -83,6 +95,16 @@ def main() -> None:
         "--artifact-root",
         default="artifacts",
         help="Root directory for persisted reports, event logs, and audit logs.",
+    )
+    parser.add_argument(
+        "--multistep-scenario-dir",
+        default="configs/multistep_scenarios",
+        help="Directory containing multi-step scenario YAML files.",
+    )
+    parser.add_argument(
+        "--multistep-report-path",
+        default=str(DEFAULT_MULTISTEP_REPORT_PATH),
+        help="Path for the multi-step scenario JSON report.",
     )
     parser.add_argument(
         "--benchmark-report-path",
@@ -109,6 +131,15 @@ def main() -> None:
         report = run_scenario_suite(
             Path(args.scenario_dir),
             Path(args.report_path),
+            artifact_root=Path(args.artifact_root),
+        )
+        print(json.dumps(report, indent=2, sort_keys=True))
+        if not report["quality_gate_passed"]:
+            raise SystemExit(1)
+    elif args.command == "multistep-scenario":
+        report = run_multistep_suite(
+            Path(args.multistep_scenario_dir),
+            Path(args.multistep_report_path),
             artifact_root=Path(args.artifact_root),
         )
         print(json.dumps(report, indent=2, sort_keys=True))

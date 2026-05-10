@@ -1,0 +1,15 @@
+# Keep the API image build context small and stable.
+.git
+.pytest_cache
+.ruff_cache
+.uv-cache
+.venv
+__pycache__
+*.egg-info
+artifacts
+dist
+build
+*.pyc
+*.pyo
+*.pyd
+.DS_Store

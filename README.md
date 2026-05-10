@@ -18,6 +18,7 @@ Local-first DevOps scaffold for a mini PIC 2.0 platform. The goal is to make rob
 ```bash
 PYTHONPATH=src python3 -m origami.cli.main smoke
 PYTHONPATH=src python3 -m origami.cli.main benchmark
+PYTHONPATH=src python3 -m origami.cli.main multistep-scenario
 PYTHONPATH=src python3 -m origami.cli.main edge-mock
 PYTHONPATH=src python3 -m origami.cli.main audit-verify
 ```
@@ -35,6 +36,15 @@ Run the local observability stack:
 
 ```bash
 make observability
+```
+
+The API service uses a local Docker image with Python runtime dependencies preinstalled, so
+dependencies are downloaded during the first image build instead of every `docker compose up`.
+Your source tree is mounted into the container, so normal code changes do not require package
+reinstallation. Rebuild the API image only after dependency changes in `pyproject.toml`:
+
+```bash
+make observability-build
 ```
 
 Prometheus will scrape the API at `http://api:8000/metrics` from inside Docker. Open `http://127.0.0.1:9090` for the Prometheus UI, `http://127.0.0.1:3000/d/origami-overview` for the provisioned Grafana dashboard, or hit `http://127.0.0.1:8000/metrics` directly for the API metrics payload.
