@@ -372,6 +372,13 @@ h2 {
   align-items: start;
 }
 
+.test-lab-column {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  align-content: start;
+}
+
 .test-lab-card {
   display: grid;
   min-width: 0;

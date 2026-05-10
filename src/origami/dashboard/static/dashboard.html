@@ -455,95 +455,101 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
           </div>
 
           <div class="test-lab-grid">
-            <section class="test-lab-card">
-              <div class="test-lab-card-heading">
-                <div>
-                  <p class="eyebrow">Scenario Suite</p>
-                  <h2>Full YAML Sweep</h2>
+            <div class="test-lab-column">
+              <section class="test-lab-card">
+                <div class="test-lab-card-heading">
+                  <div>
+                    <p class="eyebrow">Scenario Suite</p>
+                    <h2>Full YAML Sweep</h2>
+                  </div>
+                  <span id="test-suite-chip" class="status-pill neutral">--</span>
                 </div>
-                <span id="test-suite-chip" class="status-pill neutral">--</span>
-              </div>
-              <div id="test-suite-summary" class="test-lab-card-body">
-                <div class="notice">Loading latest scenario report</div>
-              </div>
-              <div class="test-lab-actions">
-                <button id="run-scenario-button" class="action-button primary" type="button">
-                  Run Suite
-                </button>
-              </div>
-            </section>
+                <div id="test-suite-summary" class="test-lab-card-body">
+                  <div class="notice">Loading latest scenario report</div>
+                </div>
+                <div class="test-lab-actions">
+                  <button id="run-scenario-button" class="action-button primary" type="button">
+                    Run Suite
+                  </button>
+                </div>
+              </section>
 
-            <section class="test-lab-card">
-              <div class="test-lab-card-heading">
-                <div>
-                  <p class="eyebrow">Single Scenario</p>
-                  <h2>Targeted Case</h2>
+              <section class="test-lab-card">
+                <div class="test-lab-card-heading">
+                  <div>
+                    <p class="eyebrow">Benchmark</p>
+                    <h2>Latency Gate</h2>
+                  </div>
+                  <span id="test-benchmark-chip" class="status-pill neutral">--</span>
                 </div>
-                <span id="test-single-chip" class="status-pill neutral">--</span>
-              </div>
-              <div class="test-lab-card-body compact-selector-body">
-                <label class="field">
-                  <span>Scenario</span>
-                  <select id="test-scenario-select"></select>
-                </label>
-                <div id="test-selected-scenario-meta" class="test-selected-scenario">
-                  <div class="notice">Loading scenario library</div>
+                <div id="test-benchmark-summary" class="test-lab-card-body">
+                  <div class="notice">Loading latest benchmark report</div>
                 </div>
-              </div>
-              <div class="test-lab-actions">
-                <button id="test-run-selected-scenario-button" class="action-button primary" type="button" disabled>
-                  Run Selected
-                </button>
-              </div>
-            </section>
+                <div class="test-lab-actions">
+                  <button id="run-benchmark-button" class="action-button primary" type="button">
+                    Run Benchmark
+                  </button>
+                </div>
+              </section>
+            </div>
 
-            <section class="test-lab-card">
-              <div class="test-lab-card-heading">
-                <div>
-                  <p class="eyebrow">Multi-Step Timeline</p>
-                  <h2>Delivery Interruption</h2>
+            <div class="test-lab-column">
+              <section class="test-lab-card">
+                <div class="test-lab-card-heading">
+                  <div>
+                    <p class="eyebrow">Single Scenario</p>
+                    <h2>Targeted Case</h2>
+                  </div>
+                  <span id="test-single-chip" class="status-pill neutral">--</span>
                 </div>
-                <span id="test-multistep-chip" class="status-pill neutral">--</span>
-              </div>
-              <div id="test-multistep-summary" class="test-lab-card-body">
-                <div class="notice">Loading latest multi-step report</div>
-              </div>
-              <div class="test-lab-card-body compact-selector-body">
-                <label class="field">
-                  <span>Timeline</span>
-                  <select id="test-multistep-scenario-select"></select>
-                </label>
-                <div id="test-selected-multistep-meta" class="test-selected-scenario">
-                  <div class="notice">Loading multi-step library</div>
+                <div class="test-lab-card-body compact-selector-body">
+                  <label class="field">
+                    <span>Scenario</span>
+                    <select id="test-scenario-select"></select>
+                  </label>
+                  <div id="test-selected-scenario-meta" class="test-selected-scenario">
+                    <div class="notice">Loading scenario library</div>
+                  </div>
                 </div>
-              </div>
-              <div class="test-lab-actions">
-                <button id="run-multistep-scenario-button" class="action-button primary" type="button">
-                  Run Timeline Suite
-                </button>
-                <button id="test-run-selected-multistep-button" class="action-button" type="button" disabled>
-                  Run Selected
-                </button>
-              </div>
-            </section>
+                <div class="test-lab-actions">
+                  <button id="test-run-selected-scenario-button" class="action-button primary" type="button" disabled>
+                    Run Selected
+                  </button>
+                </div>
+              </section>
+            </div>
 
-            <section class="test-lab-card">
-              <div class="test-lab-card-heading">
-                <div>
-                  <p class="eyebrow">Benchmark</p>
-                  <h2>Latency Gate</h2>
+            <div class="test-lab-column">
+              <section class="test-lab-card">
+                <div class="test-lab-card-heading">
+                  <div>
+                    <p class="eyebrow">Multi-Step Timeline</p>
+                    <h2>Delivery Interruption</h2>
+                  </div>
+                  <span id="test-multistep-chip" class="status-pill neutral">--</span>
                 </div>
-                <span id="test-benchmark-chip" class="status-pill neutral">--</span>
-              </div>
-              <div id="test-benchmark-summary" class="test-lab-card-body">
-                <div class="notice">Loading latest benchmark report</div>
-              </div>
-              <div class="test-lab-actions">
-                <button id="run-benchmark-button" class="action-button primary" type="button">
-                  Run Benchmark
-                </button>
-              </div>
-            </section>
+                <div id="test-multistep-summary" class="test-lab-card-body">
+                  <div class="notice">Loading latest multi-step report</div>
+                </div>
+                <div class="test-lab-card-body compact-selector-body">
+                  <label class="field">
+                    <span>Timeline</span>
+                    <select id="test-multistep-scenario-select"></select>
+                  </label>
+                  <div id="test-selected-multistep-meta" class="test-selected-scenario">
+                    <div class="notice">Loading multi-step library</div>
+                  </div>
+                </div>
+                <div class="test-lab-actions">
+                  <button id="run-multistep-scenario-button" class="action-button primary" type="button">
+                    Run Timeline Suite
+                  </button>
+                  <button id="test-run-selected-multistep-button" class="action-button" type="button" disabled>
+                    Run Selected
+                  </button>
+                </div>
+              </section>
+            </div>
 
             <section class="test-lab-card test-lab-result">
               <div class="test-lab-card-heading">
