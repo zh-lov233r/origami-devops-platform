@@ -10,6 +10,7 @@ import yaml
 
 
 SCENARIO_DIR = Path("configs/scenarios")
+MULTISTEP_SCENARIO_DIR = Path("configs/multistep_scenarios")
 EXPECTED_IDS = {
     "normal_delivery",
     "human_too_close",
@@ -32,6 +33,10 @@ EXPECTED_IDS = {
     "floor_friction_low_mu",
     "door_crossing_with_hold_confirmed",
 }
+EXPECTED_MULTISTEP_IDS = {
+    "delivery_low_battery_return",
+    "delivery_long_return_interruption",
+}
 
 
 def test_carry_go_scenario_configs_have_basic_schema() -> None:
@@ -48,6 +53,24 @@ def test_carry_go_scenario_configs_have_basic_schema() -> None:
         assert isinstance(scenario["expected"], dict)
         assert "mission_type" in scenario["observation"]
         assert "final_move" in scenario["expected"]
+        assert scenario["expected"].get("audit_valid") is True
+
+
+def test_multistep_scenario_configs_have_basic_schema() -> None:
+    scenario_paths = sorted(MULTISTEP_SCENARIO_DIR.glob("*.yaml"))
+    scenarios = [_load_yaml(path) for path in scenario_paths]
+
+    assert EXPECTED_MULTISTEP_IDS <= {scenario["id"] for scenario in scenarios}
+    for scenario in scenarios:
+        assert scenario["version"] == 1
+        assert isinstance(scenario["name"], str)
+        assert isinstance(scenario["description"], str)
+        assert isinstance(scenario["tags"], list)
+        assert isinstance(scenario["initial_observation"], dict)
+        assert isinstance(scenario["steps"], list)
+        assert scenario["steps"]
+        assert isinstance(scenario["expected"], dict)
+        assert "mission_type" in scenario["initial_observation"]
         assert scenario["expected"].get("audit_valid") is True
 
 

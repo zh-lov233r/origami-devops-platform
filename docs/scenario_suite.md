@@ -45,16 +45,35 @@ Multi-step scenarios live in `configs/multistep_scenarios/` and run one
 `PIC2Pipeline` across a timeline. Each step inherits the previous observation,
 optionally advances position from the previous action, applies an
 `observation_patch`, and evaluates that step's `expected` assertions.
+The runner also supports long-running shorthand:
+
+- Top-level `time_step_s` sets the default simulated interval when a step does
+  not provide `at_s`.
+- Top-level `battery_drain_pct_per_step`, `battery_drain_pct_per_s`, or
+  `battery_drain_pct_per_min` reduces `battery_pct` before each step runs.
+- Step-level `repeat` expands one YAML step into multiple pipeline ticks.
+- Step-level `interval_s`, `advance_position`, `battery_drain_pct`, and
+  `apply_battery_drain` override the defaults for that step.
+- Top-level `stop_on_failure: true` stops a scenario after the first failed
+  timeline step.
+- Multi-step assertions can check timeline fields such as `final_position`,
+  `final_battery_pct`, `min_mission_elapsed_s`, and
+  `max_distance_to_dock`.
 
 Run them locally with:
 
 ```bash
 .venv/bin/python -m origami.cli.main multistep-scenario
+.venv/bin/python -m origami.cli.main multistep-scenario \
+  --multistep-scenario-id delivery_long_return_interruption
 ```
 
-The default example, `delivery_low_battery_return`, starts a delivery, advances
-through normal route progress, then drops battery below the return threshold and
-expects `return_to_dock`, `battery_abort`, and `low_battery` signals.
+The default examples include:
+
+| Scenario | Main Purpose |
+| --- | --- |
+| `delivery_low_battery_return` | Starts a delivery, advances through normal route progress, then drops battery below the return threshold and expects `return_to_dock`, `battery_abort`, and `low_battery` signals. |
+| `delivery_long_return_interruption` | Uses repeated cruise ticks and battery drain, then verifies the robot pauses for a human on the return path and resumes docking after the path clears. |
 
 The runner writes:
 
@@ -62,6 +81,9 @@ The runner writes:
 - `artifacts/reports/multistep_scenario_report.md`
 - `artifacts/events/multistep_scenario_events.jsonl`
 - `artifacts/audit/multistep_scenario_audit.jsonl`
+
+The dashboard Test Lab can run the full multi-step timeline suite or one
+selected timeline through the Multi-Step Timeline card.
 
 ## Scenario Builder
 

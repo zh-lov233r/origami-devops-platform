@@ -21,6 +21,12 @@ from origami.benchmark.runner import (
     run_latency_benchmark,
 )
 from origami.core.pipeline import PIC2Pipeline
+from origami.evaluation.multistep_runner import (
+    DEFAULT_MULTISTEP_REPORT_PATH,
+    list_multistep_scenarios,
+    run_default_multistep_suite,
+    run_multistep_scenario_case,
+)
 from origami.evaluation.scenario_builder import (
     delete_scenario,
     get_scenario,
@@ -96,6 +102,11 @@ def scenario_report() -> dict[str, Any]:
     return _read_json_artifact(DEFAULT_REPORT_PATH)
 
 
+@app.get("/api/reports/multistep-scenario")
+def multistep_scenario_report() -> dict[str, Any]:
+    return _read_json_artifact(DEFAULT_MULTISTEP_REPORT_PATH)
+
+
 @app.get("/api/reports/benchmark")
 def benchmark_report() -> dict[str, Any]:
     return _read_json_artifact(DEFAULT_BENCHMARK_REPORT_PATH)
@@ -106,9 +117,25 @@ def scenario_events(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
     return _read_jsonl_artifact(ARTIFACT_ROOT / "events" / "scenario_events.jsonl", limit)
 
 
+@app.get("/api/events/multistep-scenario")
+def multistep_scenario_events(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
+    return _read_jsonl_artifact(
+        ARTIFACT_ROOT / "events" / "multistep_scenario_events.jsonl",
+        limit,
+    )
+
+
 @app.get("/api/audit/scenario")
 def scenario_audit(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
     return _read_jsonl_artifact(ARTIFACT_ROOT / "audit" / "scenario_audit.jsonl", limit)
+
+
+@app.get("/api/audit/multistep-scenario")
+def multistep_scenario_audit(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
+    return _read_jsonl_artifact(
+        ARTIFACT_ROOT / "audit" / "multistep_scenario_audit.jsonl",
+        limit,
+    )
 
 
 @app.get("/api/history/runs")
@@ -127,6 +154,11 @@ def run_history_detail(record_id: str) -> dict[str, Any]:
 @app.get("/api/scenarios")
 def scenario_configs() -> dict[str, Any]:
     return list_scenarios()
+
+
+@app.get("/api/multistep-scenarios")
+def multistep_scenario_configs() -> dict[str, Any]:
+    return list_multistep_scenarios()
 
 
 @app.get("/api/scenarios/{scenario_id}")
@@ -182,6 +214,26 @@ def scenario_run_one(scenario_id: str) -> dict[str, Any]:
         report = run_scenario_case(scenario_id)
         report["history_record"] = RUN_HISTORY.record("scenario", report)
         record_scenario_report(report, scope=report.get("scenario", {}).get("id", scenario_id))
+        return report
+    except ValueError as exc:
+        raise _scenario_http_error(exc) from exc
+
+
+@app.post("/runs/multistep-scenario")
+def multistep_scenario_run() -> dict[str, Any]:
+    report = run_default_multistep_suite()
+    report["history_record"] = RUN_HISTORY.record("scenario", report)
+    record_scenario_report(report, scope="multistep-suite")
+    return report
+
+
+@app.post("/runs/multistep-scenario/{scenario_id}")
+def multistep_scenario_run_one(scenario_id: str) -> dict[str, Any]:
+    try:
+        report = run_multistep_scenario_case(scenario_id)
+        scope = report.get("scenario", {}).get("id", scenario_id)
+        report["history_record"] = RUN_HISTORY.record("scenario", report)
+        record_scenario_report(report, scope=f"multistep-{scope}")
         return report
     except ValueError as exc:
         raise _scenario_http_error(exc) from exc

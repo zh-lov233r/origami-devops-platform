@@ -400,8 +400,15 @@ h2 {
   padding: 12px;
 }
 
+.test-lab-card-body.compact-selector-body {
+  min-height: auto;
+  padding-top: 0;
+}
+
 .test-lab-actions {
   display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
   justify-content: flex-start;
   padding: 0 12px 12px;
 }

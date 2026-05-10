@@ -481,7 +481,7 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
                 </div>
                 <span id="test-single-chip" class="status-pill neutral">--</span>
               </div>
-              <div class="test-lab-card-body">
+              <div class="test-lab-card-body compact-selector-body">
                 <label class="field">
                   <span>Scenario</span>
                   <select id="test-scenario-select"></select>
@@ -492,6 +492,36 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
               </div>
               <div class="test-lab-actions">
                 <button id="test-run-selected-scenario-button" class="action-button primary" type="button" disabled>
+                  Run Selected
+                </button>
+              </div>
+            </section>
+
+            <section class="test-lab-card">
+              <div class="test-lab-card-heading">
+                <div>
+                  <p class="eyebrow">Multi-Step Timeline</p>
+                  <h2>Delivery Interruption</h2>
+                </div>
+                <span id="test-multistep-chip" class="status-pill neutral">--</span>
+              </div>
+              <div id="test-multistep-summary" class="test-lab-card-body">
+                <div class="notice">Loading latest multi-step report</div>
+              </div>
+              <div class="test-lab-card-body compact-selector-body">
+                <label class="field">
+                  <span>Timeline</span>
+                  <select id="test-multistep-scenario-select"></select>
+                </label>
+                <div id="test-selected-multistep-meta" class="test-selected-scenario">
+                  <div class="notice">Loading multi-step library</div>
+                </div>
+              </div>
+              <div class="test-lab-actions">
+                <button id="run-multistep-scenario-button" class="action-button primary" type="button">
+                  Run Timeline Suite
+                </button>
+                <button id="test-run-selected-multistep-button" class="action-button" type="button" disabled>
                   Run Selected
                 </button>
               </div>
@@ -693,6 +723,6 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
       </main>
     </div>
 
-    <script src="/dashboard/static/dashboard.js?v=observability-link-v1"></script>
+    <script src="/dashboard/static/dashboard.js?v=multistep-timeline-v1"></script>
   </body>
 </html>

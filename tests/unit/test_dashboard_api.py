@@ -10,6 +10,12 @@ from origami.api.app import (
     benchmark_run,
     benchmark_report,
     dashboard,
+    multistep_scenario_configs,
+    multistep_scenario_audit,
+    multistep_scenario_events,
+    multistep_scenario_report,
+    multistep_scenario_run,
+    multistep_scenario_run_one,
     run_history,
     run_history_detail,
     scenario_create,
@@ -31,15 +37,21 @@ def test_dashboard_routes_are_registered() -> None:
 
     assert "/dashboard" in route_paths
     assert "/api/reports/scenario" in route_paths
+    assert "/api/reports/multistep-scenario" in route_paths
     assert "/api/reports/benchmark" in route_paths
     assert "/api/events/scenario" in route_paths
+    assert "/api/events/multistep-scenario" in route_paths
     assert "/api/audit/scenario" in route_paths
+    assert "/api/audit/multistep-scenario" in route_paths
     assert "/api/history/runs" in route_paths
     assert "/api/history/runs/{record_id}" in route_paths
     assert "/api/scenarios" in route_paths
+    assert "/api/multistep-scenarios" in route_paths
     assert "/api/scenarios/{scenario_id}" in route_paths
     assert "/runs/scenario" in route_paths
     assert "/runs/scenario/{scenario_id}" in route_paths
+    assert "/runs/multistep-scenario" in route_paths
+    assert "/runs/multistep-scenario/{scenario_id}" in route_paths
     assert "/runs/benchmark" in route_paths
     assert "/metrics" in route_paths
 
@@ -59,6 +71,9 @@ def test_dashboard_page_file_is_served() -> None:
     assert "Scenario Manager" in dashboard_path.read_text()
     assert "Test Lab" in dashboard_path.read_text()
     assert "Run Scenarios and Benchmarks" in dashboard_path.read_text()
+    assert "Multi-Step Timeline" in dashboard_path.read_text()
+    assert 'id="run-multistep-scenario-button"' in dashboard_path.read_text()
+    assert 'id="test-multistep-scenario-select"' in dashboard_path.read_text()
     assert "Duplicate" in dashboard_path.read_text()
     assert "Search Scenarios" in dashboard_path.read_text()
     assert "Tag Filter" in dashboard_path.read_text()
@@ -81,20 +96,40 @@ def test_dashboard_page_file_is_served() -> None:
 
 def test_dashboard_report_endpoints_return_artifact_payloads() -> None:
     scenario_payload = scenario_report()
+    multistep_payload = multistep_scenario_report()
     benchmark_payload = benchmark_report()
 
     assert {"available", "path", "data"} <= set(scenario_payload)
+    assert {"available", "path", "data"} <= set(multistep_payload)
     assert {"available", "path", "data"} <= set(benchmark_payload)
+
+
+def test_dashboard_multistep_config_endpoint_lists_yaml() -> None:
+    payload = multistep_scenario_configs()
+    expected_count = len(list(Path("configs/multistep_scenarios").glob("*.yaml")))
+
+    assert {"available", "path", "count", "scenarios"} <= set(payload)
+    assert payload["available"] is True
+    assert payload["count"] == expected_count
+    assert "delivery_long_return_interruption" in {
+        scenario["id"] for scenario in payload["scenarios"]
+    }
 
 
 def test_dashboard_jsonl_endpoints_return_record_payloads() -> None:
     events_payload = scenario_events(limit=5)
+    multistep_events_payload = multistep_scenario_events(limit=5)
     audit_payload = scenario_audit(limit=5)
+    multistep_audit_payload = multistep_scenario_audit(limit=5)
 
     assert {"available", "path", "count", "records"} <= set(events_payload)
+    assert {"available", "path", "count", "records"} <= set(multistep_events_payload)
     assert {"available", "path", "count", "records"} <= set(audit_payload)
+    assert {"available", "path", "count", "records"} <= set(multistep_audit_payload)
     assert len(events_payload["records"]) <= 5
+    assert len(multistep_events_payload["records"]) <= 5
     assert len(audit_payload["records"]) <= 5
+    assert len(multistep_audit_payload["records"]) <= 5
 
 
 def test_metrics_endpoint_exposes_prometheus_payload() -> None:
@@ -125,18 +160,27 @@ def test_metrics_endpoint_exposes_prometheus_payload() -> None:
 def test_dashboard_run_actions_write_reports() -> None:
     scenario_payload = scenario_run()
     single_payload = scenario_run_one("normal_delivery")
+    multistep_payload = multistep_scenario_run()
+    single_multistep_payload = multistep_scenario_run_one("delivery_low_battery_return")
     benchmark_payload = benchmark_run()
     expected_scenario_count = len(list(Path("configs/scenarios").glob("*.yaml")))
+    expected_multistep_count = len(list(Path("configs/multistep_scenarios").glob("*.yaml")))
 
     assert scenario_payload["quality_gate_passed"] is True
     assert scenario_payload["total"] == expected_scenario_count
     assert single_payload["quality_gate_passed"] is True
     assert single_payload["total"] == 1
     assert single_payload["scenario"]["id"] == "normal_delivery"
+    assert multistep_payload["quality_gate_passed"] is True
+    assert multistep_payload["total"] == expected_multistep_count
+    assert single_multistep_payload["quality_gate_passed"] is True
+    assert single_multistep_payload["scenario"]["id"] == "delivery_low_battery_return"
     assert benchmark_payload["quality_gate_passed"] is True
     assert benchmark_payload["audit_valid"] is True
     assert "history_record" in scenario_payload
     assert "history_record" in single_payload
+    assert "history_record" in multistep_payload
+    assert "history_record" in single_multistep_payload
     assert "history_record" in benchmark_payload
 
 

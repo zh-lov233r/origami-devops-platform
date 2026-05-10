@@ -16,6 +16,7 @@ from origami.edge.mock_runtime import run_edge_mock
 from origami.evaluation.scenario_runner import DEFAULT_REPORT_PATH, run_scenario_suite
 from origami.evaluation.multistep_runner import (
     DEFAULT_MULTISTEP_REPORT_PATH,
+    run_multistep_scenario_case,
     run_multistep_suite,
 )
 from origami.export.onnx_export import export_placeholder
@@ -107,6 +108,11 @@ def main() -> None:
         help="Path for the multi-step scenario JSON report.",
     )
     parser.add_argument(
+        "--multistep-scenario-id",
+        default=None,
+        help="Run one multi-step scenario id instead of the full suite.",
+    )
+    parser.add_argument(
         "--benchmark-report-path",
         default=str(DEFAULT_BENCHMARK_REPORT_PATH),
         help="Path for the benchmark JSON report.",
@@ -137,11 +143,17 @@ def main() -> None:
         if not report["quality_gate_passed"]:
             raise SystemExit(1)
     elif args.command == "multistep-scenario":
-        report = run_multistep_suite(
-            Path(args.multistep_scenario_dir),
-            Path(args.multistep_report_path),
-            artifact_root=Path(args.artifact_root),
-        )
+        if args.multistep_scenario_id:
+            report = run_multistep_scenario_case(
+                args.multistep_scenario_id,
+                Path(args.multistep_scenario_dir),
+            )
+        else:
+            report = run_multistep_suite(
+                Path(args.multistep_scenario_dir),
+                Path(args.multistep_report_path),
+                artifact_root=Path(args.artifact_root),
+            )
         print(json.dumps(report, indent=2, sort_keys=True))
         if not report["quality_gate_passed"]:
             raise SystemExit(1)

@@ -5,25 +5,31 @@ English: Artifact Dashboard frontend logic fetching FastAPI artifact APIs and re
 
 const ENDPOINTS = {
   scenario: "/api/reports/scenario",
+  multistepScenario: "/api/reports/multistep-scenario",
   benchmark: "/api/reports/benchmark",
   events: "/api/events/scenario?limit=500",
   audit: "/api/audit/scenario?limit=100",
   history: "/api/history/runs?limit=25",
   historyDetail: (recordId) => `/api/history/runs/${encodeURIComponent(recordId)}`,
   scenarios: "/api/scenarios",
+  multistepScenarios: "/api/multistep-scenarios",
   scenarioDetail: (scenarioId) => `/api/scenarios/${encodeURIComponent(scenarioId)}`,
   saveScenario: "/api/scenarios",
   runScenario: "/runs/scenario",
   runScenarioById: (scenarioId) => `/runs/scenario/${encodeURIComponent(scenarioId)}`,
+  runMultistepScenario: "/runs/multistep-scenario",
+  runMultistepScenarioById: (scenarioId) => `/runs/multistep-scenario/${encodeURIComponent(scenarioId)}`,
   runBenchmark: "/runs/benchmark",
 };
 const GRAFANA_DASHBOARD_PATH = "/d/origami-overview?orgId=1";
 
 const ACTION_BUTTON_IDS = [
   "run-scenario-button",
+  "run-multistep-scenario-button",
   "run-benchmark-button",
   "refresh-button",
   "test-run-selected-scenario-button",
+  "test-run-selected-multistep-button",
   "save-scenario-button",
   "save-run-scenario-button",
   "new-scenario-button",
@@ -74,11 +80,13 @@ let selectedScenarioSnapshot = null;
 let selectedScenarioIds = new Set();
 let scenarioDraftBaseSnapshot = null;
 let scenarioLibraryRecords = [];
+let multistepScenarioRecords = [];
 let scenarioSearchTerm = "";
 let scenarioTagFilter = "";
 let activeBuilderFormTab = "common";
 let latestScenarioPreview = null;
 let testLabSelectedScenarioId = null;
+let testLabSelectedMultistepScenarioId = null;
 let latestTestLabResult = null;
 let testRunQueue = [];
 let nextTestRunQueueId = 1;
@@ -113,28 +121,34 @@ async function loadDashboard() {
   try {
     const [
       scenarioPayload,
+      multistepScenarioPayload,
       benchmarkPayload,
       eventPayload,
       auditPayload,
       historyPayload,
       scenariosPayload,
+      multistepScenariosPayload,
     ] =
       await Promise.all([
         fetchJson(ENDPOINTS.scenario),
+        fetchJson(ENDPOINTS.multistepScenario),
         fetchJson(ENDPOINTS.benchmark),
         fetchJson(ENDPOINTS.events),
         fetchJson(ENDPOINTS.audit),
         fetchJson(ENDPOINTS.history),
         fetchJson(ENDPOINTS.scenarios),
+        fetchJson(ENDPOINTS.multistepScenarios),
       ]);
 
     renderDashboard(
       scenarioPayload,
+      multistepScenarioPayload,
       benchmarkPayload,
       eventPayload,
       auditPayload,
       historyPayload,
       scenariosPayload,
+      multistepScenariosPayload,
     );
   } catch (error) {
     renderFatalError(error);
@@ -186,6 +200,9 @@ function registerTestLab() {
   document.getElementById("run-scenario-button").addEventListener("click", () => {
     runTestLabAction("Scenario suite", ENDPOINTS.runScenario, "scenario");
   });
+  document.getElementById("run-multistep-scenario-button").addEventListener("click", () => {
+    runTestLabAction("Multi-step timeline suite", ENDPOINTS.runMultistepScenario, "multistep");
+  });
   document.getElementById("run-benchmark-button").addEventListener("click", () => {
     runTestLabAction("Benchmark", ENDPOINTS.runBenchmark, "benchmark");
   });
@@ -200,9 +217,25 @@ function registerTestLab() {
       "scenario",
     );
   });
+  document.getElementById("test-run-selected-multistep-button").addEventListener("click", () => {
+    if (!testLabSelectedMultistepScenarioId) {
+      setActionStatus("Select a multi-step scenario before running a timeline test", "fail");
+      return;
+    }
+    runTestLabAction(
+      `Multi-step ${testLabSelectedMultistepScenarioId}`,
+      ENDPOINTS.runMultistepScenarioById(testLabSelectedMultistepScenarioId),
+      "multistep",
+    );
+  });
   document.getElementById("test-scenario-select").addEventListener("change", (event) => {
     testLabSelectedScenarioId = event.target.value;
     renderTestLabSelectedScenario();
+    setActionBusy(false);
+  });
+  document.getElementById("test-multistep-scenario-select").addEventListener("change", (event) => {
+    testLabSelectedMultistepScenarioId = event.target.value;
+    renderTestLabSelectedMultistepScenario();
     setActionBusy(false);
   });
 }
@@ -461,6 +494,14 @@ function testRunQueueSteps(report, resultType) {
       name,
       status: "pass",
       detail: `p95 ${formatNumber(metrics.p95)} ms`,
+    }));
+  }
+
+  if (resultType === "multistep") {
+    return (report.scenarios || (report.scenario ? [report.scenario] : [])).map((scenario) => ({
+      name: scenario.id || scenario.name || "timeline",
+      status: scenario.passed ? "pass" : "fail",
+      detail: `${scenario.total_steps || 0} steps`,
     }));
   }
 
@@ -1212,6 +1253,8 @@ function setActionBusy(isBusy) {
     document.getElementById("duplicate-scenario-button").disabled = !selectedScenarioSnapshot;
     document.getElementById("test-run-selected-scenario-button").disabled =
       !scenarioLibraryRecords.some((scenario) => scenario.id === testLabSelectedScenarioId);
+    document.getElementById("test-run-selected-multistep-button").disabled =
+      !multistepScenarioRecords.some((scenario) => scenario.id === testLabSelectedMultistepScenarioId);
   }
 }
 
@@ -1229,19 +1272,22 @@ function setBuilderStatus(message, kind) {
 
 function renderDashboard(
   scenarioPayload,
+  multistepScenarioPayload,
   benchmarkPayload,
   eventPayload,
   auditPayload,
   historyPayload,
   scenariosPayload,
+  multistepScenariosPayload,
 ) {
   const scenarioReport = scenarioPayload.available ? scenarioPayload.data : null;
+  const multistepScenarioReport = multistepScenarioPayload.available ? multistepScenarioPayload.data : null;
   const benchmarkReport = benchmarkPayload.available ? benchmarkPayload.data : null;
 
   renderSummary(scenarioPayload, benchmarkPayload, eventPayload, auditPayload);
   renderVisualOverview(scenarioReport, historyPayload);
   renderScenarioLibrary(scenariosPayload);
-  renderTestLab(scenarioReport, benchmarkReport, scenariosPayload);
+  renderTestLab(scenarioReport, multistepScenarioReport, benchmarkReport, scenariosPayload, multistepScenariosPayload);
   renderScenarioTable(scenarioReport);
   renderLatency(benchmarkReport, scenarioReport);
   renderViolations(scenarioReport);
@@ -1641,11 +1687,19 @@ function syncScenarioSelectionClasses() {
   });
 }
 
-function renderTestLab(scenarioReport, benchmarkReport, scenariosPayload) {
+function renderTestLab(
+  scenarioReport,
+  multistepScenarioReport,
+  benchmarkReport,
+  scenariosPayload,
+  multistepScenariosPayload,
+) {
   setPill("test-lab-chip", latestTestLabResult ? "RESULT READY" : "READY", latestTestLabResult ? "info" : "neutral");
   renderTestLabSuiteSummary(scenarioReport);
+  renderTestLabMultistepSummary(multistepScenarioReport);
   renderTestLabBenchmarkSummary(benchmarkReport);
   renderTestLabScenarioSelector(scenariosPayload?.scenarios || []);
+  renderTestLabMultistepSelector(multistepScenariosPayload?.scenarios || []);
   renderTestRunQueue();
   if (latestTestLabResult) {
     renderTestLabResult(
@@ -1671,6 +1725,31 @@ function renderTestLabSuiteSummary(report) {
       ${renderDetailStat("Pass Rate", formatPercent(report.pass_rate))}
       ${renderDetailStat("Failed", String(report.failed || 0))}
       ${renderDetailStat("Generated", formatTimestamp(report.generated_at))}
+    </div>
+  `;
+}
+
+function renderTestLabMultistepSummary(report) {
+  const container = document.getElementById("test-multistep-summary");
+  if (!report) {
+    setPill("test-multistep-chip", "NO DATA", "warn");
+    container.innerHTML = `<div class="notice">No multi-step report yet</div>`;
+    return;
+  }
+
+  const maxDuration = report.summary?.max_duration_s ?? 0;
+  const minBattery = report.summary?.min_battery_pct ?? "--";
+  setPill(
+    "test-multistep-chip",
+    `${report.passed || 0}/${report.total || 0} PASS`,
+    report.quality_gate_passed ? "pass" : "fail",
+  );
+  container.innerHTML = `
+    <div class="detail-stat-grid compact">
+      ${renderDetailStat("Scenarios", String(report.total || 0))}
+      ${renderDetailStat("Steps", String(report.total_steps || 0))}
+      ${renderDetailStat("Duration", `${formatNumber(maxDuration)}s`)}
+      ${renderDetailStat("Min Battery", minBattery === "--" ? "--" : `${formatNumber(minBattery)}%`)}
     </div>
   `;
 }
@@ -1721,6 +1800,31 @@ function renderTestLabScenarioSelector(scenarios) {
   renderTestLabSelectedScenario();
 }
 
+function renderTestLabMultistepSelector(scenarios) {
+  multistepScenarioRecords = scenarios;
+  const select = document.getElementById("test-multistep-scenario-select");
+  if (!scenarios.length) {
+    testLabSelectedMultistepScenarioId = null;
+    select.innerHTML = `<option value="">No multi-step scenarios available</option>`;
+    renderTestLabSelectedMultistepScenario();
+    return;
+  }
+
+  const preferredId = testLabSelectedMultistepScenarioId || select.value || scenarios[0].id;
+  testLabSelectedMultistepScenarioId = scenarios.some((scenario) => scenario.id === preferredId)
+    ? preferredId
+    : scenarios[0].id;
+  select.innerHTML = scenarios
+    .map(
+      (scenario) => `
+        <option value="${escapeHtml(scenario.id)}">${escapeHtml(scenario.name || scenario.id)}</option>
+      `,
+    )
+    .join("");
+  select.value = testLabSelectedMultistepScenarioId;
+  renderTestLabSelectedMultistepScenario();
+}
+
 function renderTestLabSelectedScenario() {
   const scenario = scenarioLibraryRecords.find((item) => item.id === testLabSelectedScenarioId);
   const container = document.getElementById("test-selected-scenario-meta");
@@ -1735,6 +1839,26 @@ function renderTestLabSelectedScenario() {
     <div class="test-selected-scenario-card">
       <strong>${escapeHtml(scenario.name || scenario.id)}</strong>
       <span>${escapeHtml(scenario.id)}</span>
+      ${renderTags(scenario.tags)}
+    </div>
+  `;
+}
+
+function renderTestLabSelectedMultistepScenario() {
+  const scenario = multistepScenarioRecords.find((item) => item.id === testLabSelectedMultistepScenarioId);
+  const container = document.getElementById("test-selected-multistep-meta");
+  document.getElementById("test-run-selected-multistep-button").disabled = !scenario;
+
+  if (!scenario) {
+    container.innerHTML = `<div class="notice">Select a timeline to run a targeted multi-step test.</div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="test-selected-scenario-card">
+      <strong>${escapeHtml(scenario.name || scenario.id)}</strong>
+      <span>${escapeHtml(scenario.id)}</span>
+      <span>${escapeHtml(`${scenario.expanded_steps || scenario.configured_steps || 0} ticks`)}</span>
       ${renderTags(scenario.tags)}
     </div>
   `;
@@ -1768,7 +1892,9 @@ function renderTestLabResult(label, report, resultType) {
   document.getElementById("test-lab-result-body").innerHTML =
     resultType === "benchmark"
       ? renderTestLabBenchmarkResult(report)
-      : renderTestLabScenarioResult(report);
+      : resultType === "multistep"
+        ? renderTestLabMultistepResult(report)
+        : renderTestLabScenarioResult(report);
 }
 
 function renderTestLabScenarioResult(report) {
@@ -1809,6 +1935,28 @@ function renderTestLabBenchmarkResult(report) {
       ${renderDetailStat("History", shortHash(historyId))}
       ${renderDetailStat("Runner", "latency")}
     </div>
+    ${renderDetailLatency(latency)}
+  `;
+}
+
+function renderTestLabMultistepResult(report) {
+  const scenarios = report.scenarios || (report.scenario ? [report.scenario] : []);
+  const latency = report.summary?.module_latency_ms || {};
+  const maxP95 = maxModuleP95(latency);
+  const historyId = report.history_record?.id || "--";
+
+  return `
+    <div class="detail-stat-grid compact">
+      ${renderDetailStat("Scenarios", String(report.total || scenarios.length || 0))}
+      ${renderDetailStat("Steps", String(report.total_steps || 0))}
+      ${renderDetailStat("Step Pass", formatPercent(report.step_pass_rate))}
+      ${renderDetailStat("Duration", `${formatNumber(report.summary?.max_duration_s || 0)}s`)}
+      ${renderDetailStat("Min Battery", formatOptionalPercent(report.summary?.min_battery_pct))}
+      ${renderDetailStat("Max P95", `${formatNumber(maxP95)} ms`)}
+      ${renderDetailStat("History", shortHash(historyId))}
+      ${renderDetailStat("Suite", report.suite || "carry_go_multistep")}
+    </div>
+    ${renderTestLabMultistepRows(scenarios)}
     ${renderDetailLatency(latency)}
   `;
 }
@@ -1855,6 +2003,59 @@ function renderTestLabScenarioRows(scenarios) {
                   <td>${escapeHtml(actual.route_strategy || "--")}</td>
                   <td>${renderViolationStatus(scenario.violation_analysis)}</td>
                   <td>${renderViolationTokens(actual.violations || [])}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderTestLabMultistepRows(scenarios) {
+  if (!scenarios.length) {
+    return `<div class="notice">No multi-step rows returned</div>`;
+  }
+
+  return `
+    <div class="detail-table-wrap">
+      <table class="detail-table">
+        <thead>
+          <tr>
+            <th>Timeline</th>
+            <th>Result</th>
+            <th>Steps</th>
+            <th>Duration</th>
+            <th>Battery</th>
+            <th>Final Move</th>
+            <th>Safety</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${scenarios
+            .slice(0, 12)
+            .map((scenario) => {
+              const actual = scenario.final_actual || {};
+              const timeline = scenario.timeline || {};
+              return `
+                <tr>
+                  <td>
+                    <div class="history-run">
+                      <strong>${escapeHtml(scenario.name || scenario.id)}</strong>
+                      <span>${escapeHtml(scenario.id || "--")}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-pill ${scenario.passed ? "pass" : "fail"}">
+                      ${scenario.passed ? "PASS" : "FAIL"}
+                    </span>
+                  </td>
+                  <td>${escapeHtml(`${scenario.passed_steps || 0}/${scenario.total_steps || 0}`)}</td>
+                  <td>${escapeHtml(`${formatNumber(timeline.duration_s || 0)}s`)}</td>
+                  <td>${escapeHtml(formatOptionalPercent(timeline.min_battery_pct))}</td>
+                  <td>${escapeHtml(actual.final_move || "--")}</td>
+                  <td>${renderStepSafetySummary(scenario.steps || [])}</td>
                 </tr>
               `;
             })
@@ -2640,6 +2841,29 @@ function renderViolationStatus(analysis) {
   };
   const [label, kind] = metadata[status] || [status.toUpperCase(), "neutral"];
   return `<span class="status-pill ${kind}">${escapeHtml(label)}</span>`;
+}
+
+function renderStepSafetySummary(steps) {
+  const counts = steps.reduce(
+    (accumulator, step) => {
+      const status = step.violation_analysis?.status || "none";
+      accumulator[status] = (accumulator[status] || 0) + 1;
+      return accumulator;
+    },
+    {},
+  );
+  const riskyCount = (counts.unexpected || 0) + (counts.missing || 0) + (counts.mixed || 0);
+  if (riskyCount) {
+    return `<span class="status-pill fail">${riskyCount} RISK</span>`;
+  }
+  if (counts.expected) {
+    return `<span class="status-pill info">${counts.expected} EXPECTED</span>`;
+  }
+  return `<span class="status-pill pass">CLEAR</span>`;
+}
+
+function formatOptionalPercent(value) {
+  return typeof value === "number" ? `${formatNumber(value)}%` : "--";
 }
 
 function historyScope(record) {

@@ -23,6 +23,9 @@ PYTHONPATH=src python3 -m origami.cli.main edge-mock
 PYTHONPATH=src python3 -m origami.cli.main audit-verify
 ```
 
+The `multistep-scenario` command includes long-running timeline cases with repeated
+pipeline ticks, simulated battery drain, and mid-route interruption/recovery checks.
+
 Run the dashboard after generating scenario and benchmark artifacts:
 
 ```bash
@@ -30,7 +33,7 @@ make quality
 make dashboard
 ```
 
-Open `http://127.0.0.1:8000/dashboard`. The dashboard can build custom scenarios, refresh artifacts, trigger scenario or benchmark runs, show run history, and open the provisioned Grafana observability dashboard in a new tab.
+Open `http://127.0.0.1:8000/dashboard`. The dashboard can build custom scenarios, refresh artifacts, trigger scenario, multi-step timeline, or benchmark runs, show run history, and open the provisioned Grafana observability dashboard in a new tab.
 
 Run the local observability stack:
 
