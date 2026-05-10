@@ -41,6 +41,20 @@ Prometheus will scrape the API at `http://api:8000/metrics` from inside Docker. 
 
 The Prometheus stack also loads local alert rules for API availability, 5xx errors, p95 latency, scenario gate failures, benchmark gate failures, pass-rate drops, and module latency regressions. Open `http://127.0.0.1:9090/alerts` to inspect active alerts.
 
+## Continuous Integration
+
+GitHub Actions runs the project quality gates on every push and pull request:
+
+```bash
+make lint
+python -m pytest --junitxml=artifacts/reports/pytest.xml
+make scenario
+make benchmark
+make audit-verify
+```
+
+The workflow uploads `artifacts/reports`, `artifacts/events`, and `artifacts/audit` so failed runs keep the scenario report, benchmark report, pytest XML, event log, and audit log attached to the CI run.
+
 ## Target Workflow
 
 ```text

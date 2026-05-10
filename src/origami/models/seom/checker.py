@@ -1,5 +1,5 @@
-"""中文：SEOM 基础安全检查器，执行 Carry & Go 规则并对不安全动作做覆盖。
-
+"""
+中文：SEOM 基础安全检查器，执行 Carry & Go 规则并对不安全动作做覆盖。
 English: Basic SEOM safety checker that evaluates Carry & Go rules and overrides unsafe actions.
 """
 
