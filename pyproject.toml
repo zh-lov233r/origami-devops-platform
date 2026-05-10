@@ -8,27 +8,31 @@ description = "Local-first mini PIC 2.0 DevOps platform scaffold"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",
-  "gymnasium>=1.0",
-  "matplotlib>=3.9",
-  "networkx>=3.3",
-  "numpy>=2.0",
-  "onnxruntime>=1.19",
   "prometheus-client>=0.21",
-  "pydantic>=2.8",
   "pyyaml>=6.0",
-  "torch>=2.4",
   "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
 dev = [
+  "matplotlib>=3.9",
+  "numpy>=2.0",
   "pytest>=8.3",
   "ruff>=0.6",
 ]
+export = [
+  "onnxruntime>=1.19",
+  "torch>=2.4",
+]
 rl = [
+  "gymnasium>=1.0",
   "stable-baselines3>=2.3",
   "pettingzoo>=1.24",
   "mapie>=0.9",
+]
+viz = [
+  "matplotlib>=3.9",
+  "numpy>=2.0",
 ]
 
 [tool.pytest.ini_options]
