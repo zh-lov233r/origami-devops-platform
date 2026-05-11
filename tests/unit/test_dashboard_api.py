@@ -54,6 +54,7 @@ def test_dashboard_routes_are_registered() -> None:
     assert "/runs/multistep-scenario/{scenario_id}" in route_paths
     assert "/runs/benchmark" in route_paths
     assert "/metrics" in route_paths
+    assert "/api/runtime-config" in route_paths
 
 
 def test_dashboard_page_file_is_served() -> None:
@@ -67,6 +68,8 @@ def test_dashboard_page_file_is_served() -> None:
     assert 'data-tab-target="test-lab"' in dashboard_path.read_text()
     assert 'data-tab-target="run-history"' in dashboard_path.read_text()
     assert 'id="observability-button"' in dashboard_path.read_text()
+    assert 'id="api-token-input"' in dashboard_path.read_text()
+    assert 'id="auth-status"' in dashboard_path.read_text()
     assert "http://127.0.0.1:3000/d/origami-overview?orgId=1" in dashboard_path.read_text()
     assert "Scenario Manager" in dashboard_path.read_text()
     assert "Test Lab" in dashboard_path.read_text()

@@ -12,6 +12,15 @@ services:
     command: ["python", "-m", "origami.api.app"]
     environment:
       PYTHONPATH: /workspace/src
+      ORIGAMI_ENV: ${ORIGAMI_ENV:-local}
+      ORIGAMI_ARTIFACT_ROOT: /workspace/artifacts
+      ORIGAMI_AUTH_REQUIRED: ${ORIGAMI_AUTH_REQUIRED:-false}
+      ORIGAMI_API_TOKEN: ${ORIGAMI_API_TOKEN:-}
+      ORIGAMI_GRAFANA_URL: ${ORIGAMI_GRAFANA_URL:-http://127.0.0.1:3000/d/origami-overview?orgId=1}
+      ORIGAMI_LOG_LEVEL: ${ORIGAMI_LOG_LEVEL:-INFO}
+      ORIGAMI_ALLOWED_ORIGINS: ${ORIGAMI_ALLOWED_ORIGINS:-}
+      ORIGAMI_TRUSTED_HOSTS: ${ORIGAMI_TRUSTED_HOSTS:-}
+      ORIGAMI_ACTOR_HEADER: ${ORIGAMI_ACTOR_HEADER:-X-Origami-Actor}
     ports:
       - "8000:8000"
     volumes:

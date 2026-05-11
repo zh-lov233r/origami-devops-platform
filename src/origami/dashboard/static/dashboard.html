@@ -18,6 +18,17 @@ English: Artifact Dashboard page showing the latest scenario, benchmark, event, 
           <h1>Artifact Dashboard</h1>
         </div>
         <div class="topbar-actions">
+          <label class="auth-token-field">
+            <span>API Token</span>
+            <input id="api-token-input" type="password" autocomplete="off" placeholder="Token" />
+          </label>
+          <button id="save-api-token-button" class="action-button" type="button">
+            Use Token
+          </button>
+          <button id="clear-api-token-button" class="action-button" type="button">
+            Clear Token
+          </button>
+          <span id="auth-status" class="status-pill neutral">LOCAL AUTH OFF</span>
           <a
             id="observability-button"
             class="action-button"

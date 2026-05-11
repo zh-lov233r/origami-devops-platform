@@ -4,6 +4,7 @@ English: Artifact Dashboard frontend logic fetching FastAPI artifact APIs and re
 */
 
 const ENDPOINTS = {
+  runtimeConfig: "/api/runtime-config",
   scenario: "/api/reports/scenario",
   multistepScenario: "/api/reports/multistep-scenario",
   benchmark: "/api/reports/benchmark",
@@ -22,6 +23,7 @@ const ENDPOINTS = {
   runBenchmark: "/runs/benchmark",
 };
 const GRAFANA_DASHBOARD_PATH = "/d/origami-overview?orgId=1";
+const API_TOKEN_STORAGE_KEY = "origami.apiToken";
 
 const ACTION_BUTTON_IDS = [
   "run-scenario-button",
@@ -73,6 +75,12 @@ const DEFAULT_SCENARIO_FORM = {
     audit_valid: true,
   },
 };
+let apiToken = readStoredApiToken();
+let runtimeConfig = {
+  auth_required: false,
+  grafana_url: null,
+  environment: "local",
+};
 let selectedHistoryRunId = null;
 let selectedHistoryDetailPayload = null;
 let selectedScenarioId = null;
@@ -99,6 +107,7 @@ const historyDetailCache = new Map();
 
 document.addEventListener("DOMContentLoaded", () => {
   registerObservabilityLinks();
+  registerAuthControls();
   registerTabs();
   registerActionButtons();
   registerTestLab();
@@ -106,7 +115,9 @@ document.addEventListener("DOMContentLoaded", () => {
   registerHistoryDetails();
   activateBuilderFormTab(activeBuilderFormTab);
   renderScenarioDraftAssist();
-  loadDashboard();
+  loadRuntimeConfig().finally(() => {
+    loadDashboard();
+  });
 });
 
 function registerObservabilityLinks() {
@@ -114,7 +125,50 @@ function registerObservabilityLinks() {
   if (!button) {
     return;
   }
-  button.href = `${window.location.protocol}//${window.location.hostname}:3000${GRAFANA_DASHBOARD_PATH}`;
+  button.href =
+    runtimeConfig.grafana_url ||
+    `${window.location.protocol}//${window.location.hostname}:3000${GRAFANA_DASHBOARD_PATH}`;
+}
+
+function registerAuthControls() {
+  const input = document.getElementById("api-token-input");
+  const saveButton = document.getElementById("save-api-token-button");
+  const clearButton = document.getElementById("clear-api-token-button");
+  if (!input || !saveButton || !clearButton) {
+    return;
+  }
+
+  input.value = apiToken;
+  saveButton.addEventListener("click", () => {
+    apiToken = input.value.trim();
+    storeApiToken(apiToken);
+    updateAuthStatus();
+    setActionStatus(apiToken ? "API token saved for this browser session" : "API token cleared", "info");
+  });
+  clearButton.addEventListener("click", () => {
+    apiToken = "";
+    input.value = "";
+    storeApiToken(apiToken);
+    updateAuthStatus();
+    setActionStatus("API token cleared", "info");
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveButton.click();
+    }
+  });
+  updateAuthStatus();
+}
+
+async function loadRuntimeConfig() {
+  try {
+    runtimeConfig = await fetchJson(ENDPOINTS.runtimeConfig, { skipAuth: true });
+    registerObservabilityLinks();
+    updateAuthStatus();
+  } catch {
+    updateAuthStatus();
+  }
 }
 
 async function loadDashboard() {
@@ -155,8 +209,8 @@ async function loadDashboard() {
   }
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url);
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, { headers: requestHeaders({ skipAuth: options.skipAuth }) });
   if (!response.ok) {
     throw new Error(`${url} returned ${response.status}`);
   }
@@ -168,9 +222,9 @@ async function postJson(url, payload = null) {
 }
 
 async function requestJson(method, url, payload = null) {
-  const options = { method };
+  const options = { method, headers: requestHeaders() };
   if (payload !== null) {
-    options.headers = { "Content-Type": "application/json" };
+    options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(payload);
   }
 
@@ -179,6 +233,51 @@ async function requestJson(method, url, payload = null) {
     throw new Error(await errorMessage(response, url));
   }
   return response.json();
+}
+
+function requestHeaders(options = {}) {
+  const headers = {};
+  if (!options.skipAuth && apiToken) {
+    headers["X-Origami-Token"] = apiToken;
+  }
+  return headers;
+}
+
+function readStoredApiToken() {
+  try {
+    return window.sessionStorage.getItem(API_TOKEN_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function storeApiToken(token) {
+  try {
+    if (token) {
+      window.sessionStorage.setItem(API_TOKEN_STORAGE_KEY, token);
+    } else {
+      window.sessionStorage.removeItem(API_TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    return;
+  }
+}
+
+function updateAuthStatus() {
+  const node = document.getElementById("auth-status");
+  if (!node) {
+    return;
+  }
+
+  if (runtimeConfig.auth_required && apiToken) {
+    setPill("auth-status", "TOKEN READY", "pass");
+  } else if (runtimeConfig.auth_required) {
+    setPill("auth-status", "TOKEN REQUIRED", "fail");
+  } else if (apiToken) {
+    setPill("auth-status", "TOKEN SET", "info");
+  } else {
+    setPill("auth-status", "LOCAL AUTH OFF", "neutral");
+  }
 }
 
 async function errorMessage(response, url) {

@@ -35,6 +35,19 @@ make dashboard
 
 Open `http://127.0.0.1:8000/dashboard`. The dashboard can build custom scenarios, refresh artifacts, trigger scenario, multi-step timeline, or benchmark runs, show run history, and open the provisioned Grafana observability dashboard in a new tab.
 
+For an internal deployment-style local run, require an API token for report, audit, history,
+scenario, benchmark, and run endpoints:
+
+```bash
+ORIGAMI_AUTH_REQUIRED=true ORIGAMI_API_TOKEN=dev-token make dashboard
+```
+
+Enter the same token in the Dashboard API Token field. Health checks stay public by default,
+and `/metrics` stays public unless `ORIGAMI_METRICS_AUTH_REQUIRED=true` is set.
+Internal deployments can also set `ORIGAMI_ALLOWED_ORIGINS`,
+`ORIGAMI_TRUSTED_HOSTS`, and `ORIGAMI_ACTOR_HEADER` to restrict browser origins,
+validate host headers, and record the upstream developer identity in structured operation logs.
+
 Run the local observability stack:
 
 ```bash
@@ -78,3 +91,9 @@ config -> run pipeline -> collect events -> benchmark latency
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md).
+
+## Production Readiness
+
+See [PRODUCTION_READINESS.zh.md](PRODUCTION_READINESS.zh.md) or
+[PRODUCTION_READINESS.en.md](PRODUCTION_READINESS.en.md) for the internal v0.1 launch
+scope, non-goals, DevOps rollout plan, and production readiness checklist.

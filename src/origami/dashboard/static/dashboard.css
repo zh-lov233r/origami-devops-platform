@@ -62,6 +62,36 @@ body {
   flex-wrap: wrap;
 }
 
+.auth-token-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.auth-token-field input {
+  width: 150px;
+  min-height: 22px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+}
+
+.auth-token-field input::placeholder {
+  color: #98a2b3;
+}
+
 .action-strip {
   display: flex;
   align-items: center;
