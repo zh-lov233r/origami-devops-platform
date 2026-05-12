@@ -191,17 +191,17 @@ Acceptance criteria:
 
 - [x] API/Dashboard write operations are authenticated.
 - [x] Report, audit, and history read policy is defined.
-- [ ] Production Grafana does not use anonymous admin.
+- [x] Production Grafana does not use anonymous admin.
 - [ ] Production access is limited to internal networks or VPN.
 - [x] Critical operations record actor and request id.
 
 ### Deployment
 
-- [ ] Production image does not depend on source mounts.
-- [ ] Containers run as a non-root user.
-- [ ] Image versions are pinned and do not use floating tags.
-- [ ] Production compose/chart is separated from development compose.
-- [ ] Artifacts/history/audit use persistent volumes.
+- [x] Production image does not depend on source mounts.
+- [x] Containers run as a non-root user.
+- [x] Image versions are pinned and do not use floating tags.
+- [x] Production compose/chart is separated from development compose.
+- [x] Artifacts/history/audit use persistent volumes.
 
 ### Reliability
 

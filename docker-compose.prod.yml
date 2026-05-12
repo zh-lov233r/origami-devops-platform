@@ -1,0 +1,141 @@
+# 中文：内部生产部署编排，面向 Carry & Go 开发者仿真验证平台。
+# English: Internal production orchestration for the Carry & Go developer validation platform.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${ORIGAMI_API_IMAGE:-origami-devops-platform-api:0.1.0}
+    init: true
+    restart: unless-stopped
+    environment:
+      ORIGAMI_ENV: ${ORIGAMI_ENV:-production}
+      ORIGAMI_ARTIFACT_ROOT: /var/lib/origami/artifacts
+      ORIGAMI_AUTH_REQUIRED: "true"
+      ORIGAMI_API_TOKEN: ${ORIGAMI_API_TOKEN:?Set ORIGAMI_API_TOKEN for internal production}
+      ORIGAMI_GRAFANA_URL: ${ORIGAMI_GRAFANA_URL:-http://127.0.0.1:3000/d/origami-overview?orgId=1}
+      ORIGAMI_LOG_LEVEL: ${ORIGAMI_LOG_LEVEL:-INFO}
+      ORIGAMI_ALLOWED_ORIGINS: ${ORIGAMI_ALLOWED_ORIGINS:?Set ORIGAMI_ALLOWED_ORIGINS for internal production}
+      ORIGAMI_TRUSTED_HOSTS: ${ORIGAMI_TRUSTED_HOSTS:?Set ORIGAMI_TRUSTED_HOSTS for internal production}
+      ORIGAMI_ACTOR_HEADER: ${ORIGAMI_ACTOR_HEADER:-X-Origami-Actor}
+      ORIGAMI_METRICS_AUTH_REQUIRED: ${ORIGAMI_METRICS_AUTH_REQUIRED:-false}
+    ports:
+      - "${ORIGAMI_API_BIND:-127.0.0.1:8000}:8000"
+    volumes:
+      - origami-artifacts:/var/lib/origami/artifacts
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 768M
+        reservations:
+          memory: 256M
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+    ports:
+      - "${PROMETHEUS_BIND:-127.0.0.1:9090}:9090"
+    volumes:
+      - ./configs/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/observability/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://127.0.0.1:9090/-/healthy || exit 1",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?Set GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/origami-overview.json
+      GF_SECURITY_ALLOW_EMBEDDING: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://127.0.0.1:3000}
+      GF_USERS_DEFAULT_THEME: light
+    ports:
+      - "${GRAFANA_BIND:-127.0.0.1:3000}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./configs/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./configs/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://127.0.0.1:3000/api/health || exit 1",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          memory: 128M
+
+volumes:
+  origami-artifacts:
+  prometheus-data:
+  grafana-data:

@@ -7,6 +7,10 @@ __pycache__/
 .ruff_cache/
 .uv-cache/
 .venv/
+.env
+.env.*
+!.env.example
+!.env.*.example
 artifacts/**/*.json
 artifacts/**/*.jsonl
 artifacts/**/*.md

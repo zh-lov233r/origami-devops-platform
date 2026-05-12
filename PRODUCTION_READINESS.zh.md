@@ -191,17 +191,17 @@ v0.1 上线成功意味着平台可以作为内部开发者仿真验证服务稳
 
 - [x] API/Dashboard 写操作已鉴权。
 - [x] Report、audit 和 history 读取策略已定义。
-- [ ] Grafana 生产环境不使用 anonymous admin。
+- [x] Grafana 生产环境不使用 anonymous admin。
 - [ ] 生产环境只允许内部网络或 VPN 访问。
 - [x] 关键操作记录 actor 和 request id。
 
 ### Deployment
 
-- [ ] 生产镜像不依赖源码挂载。
-- [ ] 容器以非 root 用户运行。
-- [ ] 镜像版本固定，不使用 floating tag。
-- [ ] prod compose/chart 和 dev compose 分离。
-- [ ] artifacts/history/audit 使用持久卷。
+- [x] 生产镜像不依赖源码挂载。
+- [x] 容器以非 root 用户运行。
+- [x] 镜像版本固定，不使用 floating tag。
+- [x] prod compose/chart 和 dev compose 分离。
+- [x] artifacts/history/audit 使用持久卷。
 
 ### Reliability
 

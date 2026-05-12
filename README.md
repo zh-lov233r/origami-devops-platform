@@ -67,6 +67,32 @@ Prometheus will scrape the API at `http://api:8000/metrics` from inside Docker. 
 
 The Prometheus stack also loads local alert rules for API availability, 5xx errors, p95 latency, scenario gate failures, benchmark gate failures, pass-rate drops, and module latency regressions. Open `http://127.0.0.1:9090/alerts` to inspect active alerts.
 
+## Internal Production Compose
+
+The default `docker-compose.yml` is intentionally developer-friendly: it mounts the
+source tree and enables local Grafana anonymous access. For an internal deployment
+dry run, use the production compose file instead:
+
+```bash
+cp .env.production.example .env.production
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+```
+
+Before starting it, replace the placeholder token, allowed origins, trusted hosts,
+and Grafana admin password in `.env.production`. The production compose file builds
+the API from the locked `uv.lock` dependency graph, runs the API as a non-root user,
+uses persistent volumes for Origami artifacts, Prometheus data, and Grafana data,
+pins Prometheus/Grafana images, and disables Grafana anonymous admin access.
+
+Services bind to `127.0.0.1` by default so an internal reverse proxy or VPN gateway
+owns external access:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f api
+docker compose --env-file .env.production -f docker-compose.prod.yml down
+```
+
 ## Continuous Integration
 
 GitHub Actions runs the project quality gates on every push and pull request:
