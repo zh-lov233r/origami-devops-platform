@@ -111,6 +111,13 @@ which defaults to `artifacts/configs/scenarios`. The built-in scenario files in
 `configs/scenarios` remain read-only inputs, and custom files overlay them at
 list and run time.
 
+When an internal gateway or SSO proxy supplies the configured actor header
+(`ORIGAMI_ACTOR_HEADER`, default `X-Origami-Actor`), the API stores user-owned
+data under `artifacts/users/<user_id>/`. Custom scenarios are written to
+`artifacts/users/<user_id>/configs/scenarios`, and dashboard-triggered reports,
+events, audit logs, and run history are written under the same user namespace.
+Without a trusted actor header, the API keeps the local shared-data behavior.
+
 ## Release Gate
 
 GitHub Actions uses `.github/workflows/quality.yml` as the authoritative

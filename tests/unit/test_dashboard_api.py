@@ -5,6 +5,10 @@ English: Unit tests for the dashboard API ensuring the artifact dashboard page a
 
 from pathlib import Path
 
+import pytest
+from fastapi import HTTPException
+from starlette.requests import Request
+
 from origami.api.app import (
     _artifact_path,
     app,
@@ -285,3 +289,100 @@ def test_dashboard_scenario_manager_endpoints_update_and_delete(monkeypatch, tmp
     assert updated["scenario"]["name"] == "Dashboard Manager Edited"
     assert deleted["deleted"] is True
     assert not (custom_dir / "dashboard_manager_tmp.yaml").exists()
+
+
+def test_dashboard_user_namespaces_isolate_custom_scenarios_and_history(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("origami.api.app.ARTIFACT_ROOT", tmp_path)
+    monkeypatch.setattr("origami.api.app.CUSTOM_SCENARIO_DIR", tmp_path / "shared-scenarios")
+    alice = _request({"X-Origami-Actor": "alice-dev"})
+    bob = _request({"X-Origami-Actor": "bob-dev"})
+
+    alice_created = scenario_create(
+        {
+            "id": "private_delivery",
+            "name": "Alice Private Delivery",
+            "tags": ["private"],
+            "observation": {"position": [0, 0], "target": [1, 1]},
+            "expected": {"final_move": "east"},
+        },
+        request=alice,
+    )
+    bob_created = scenario_create(
+        {
+            "id": "private_delivery",
+            "name": "Bob Private Delivery",
+            "tags": ["private"],
+            "observation": {"position": [0, 0], "target": [1, 1]},
+            "expected": {"final_move": "east"},
+        },
+        request=bob,
+    )
+
+    assert Path(alice_created["path"]).parent == (
+        tmp_path / "users" / "alice-dev" / "configs" / "scenarios"
+    )
+    assert Path(bob_created["path"]).parent == (
+        tmp_path / "users" / "bob-dev" / "configs" / "scenarios"
+    )
+    assert alice_created["owner_user_id"] == "alice-dev"
+    assert bob_created["owner_user_id"] == "bob-dev"
+
+    alice_detail = scenario_detail("private_delivery", request=alice)
+    bob_detail = scenario_detail("private_delivery", request=bob)
+    alice_ids = {scenario["id"] for scenario in scenario_configs(request=alice)["scenarios"]}
+    bob_ids = {scenario["id"] for scenario in scenario_configs(request=bob)["scenarios"]}
+
+    assert alice_detail["scenario"]["name"] == "Alice Private Delivery"
+    assert bob_detail["scenario"]["name"] == "Bob Private Delivery"
+    assert "private_delivery" in alice_ids
+    assert "private_delivery" in bob_ids
+
+    alice_deleted = scenario_delete("private_delivery", request=alice)
+    assert alice_deleted["deleted"] is True
+    with pytest.raises(HTTPException) as exc_info:
+        scenario_detail("private_delivery", request=alice)
+    assert exc_info.value.status_code == 404
+    assert scenario_detail("private_delivery", request=bob)["scenario"]["name"] == "Bob Private Delivery"
+
+    run_payload = scenario_run_one("private_delivery", request=bob)
+    assert run_payload["owner_user_id"] == "bob-dev"
+    assert run_payload["visibility"] == "private"
+    assert run_payload["history_record"]["owner_user_id"] == "bob-dev"
+    assert Path(run_payload["history_record"]["artifact_dir"]).parent == (
+        tmp_path / "users" / "bob-dev" / "runs"
+    )
+
+    bob_history = run_history(limit=5, request=bob)
+    alice_history = run_history(limit=5, request=alice)
+    assert bob_history["count"] == 1
+    assert alice_history["count"] == 0
+    assert bob_history["records"][0]["id"] == run_payload["run_id"]
+
+    bob_detail_payload = run_history_detail(run_payload["run_id"], request=bob)
+    assert bob_detail_payload["available"] is True
+    assert bob_detail_payload["record"]["owner_user_id"] == "bob-dev"
+    with pytest.raises(HTTPException) as exc_info:
+        run_history_detail(run_payload["run_id"], request=alice)
+    assert exc_info.value.status_code == 404
+
+
+def _request(headers: dict[str, str] | None = None) -> Request:
+    header_items = [
+        (name.lower().encode("latin-1"), value.encode("latin-1"))
+        for name, value in (headers or {}).items()
+    ]
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/dashboard",
+            "headers": header_items,
+            "query_string": b"",
+            "scheme": "http",
+            "server": ("testserver", 80),
+            "client": ("testclient", 50000),
+        }
+    )

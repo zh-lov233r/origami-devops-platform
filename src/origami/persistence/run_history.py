@@ -37,10 +37,18 @@ class RunHistoryStore:
         run_type: str,
         report: dict[str, Any],
         run_id: str | None = None,
+        owner_user_id: str | None = None,
+        actor: str | None = None,
+        visibility: str = "shared",
     ) -> dict[str, Any]:
         """Persist a full report snapshot and append a compact history record."""
         record_id = safe_run_id(run_id or str(report.get("run_id") or "") or _record_id(run_type, report))
         report["run_id"] = record_id
+        if owner_user_id:
+            report["owner_user_id"] = owner_user_id
+        if actor:
+            report["actor"] = actor
+        report["visibility"] = visibility
         run_dir = Path("runs") / record_id
         snapshot_path = run_dir / "report.json"
 
@@ -50,6 +58,9 @@ class RunHistoryStore:
             report=report,
             artifact_path=self.root / snapshot_path,
             artifact_dir=self.root / run_dir,
+            owner_user_id=owner_user_id,
+            actor=actor,
+            visibility=visibility,
         )
         report["history_record"] = record
         self.store.write_json(snapshot_path, report)
@@ -188,6 +199,9 @@ def _summarize_run(
     report: dict[str, Any],
     artifact_path: Path,
     artifact_dir: Path,
+    owner_user_id: str | None = None,
+    actor: str | None = None,
+    visibility: str = "shared",
 ) -> dict[str, Any]:
     module_latency = _module_latency(report)
     max_p95_ms = max((float(metrics.get("p95", 0.0)) for metrics in module_latency.values()), default=0.0)
@@ -203,6 +217,9 @@ def _summarize_run(
         "artifact_path": str(artifact_path),
         "artifacts": report.get("artifacts", {}),
         "max_module_p95_ms": round(max_p95_ms, 4),
+        "owner_user_id": owner_user_id,
+        "actor": actor,
+        "visibility": visibility,
     }
 
     if run_type == "scenario":

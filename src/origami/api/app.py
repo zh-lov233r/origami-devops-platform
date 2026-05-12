@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import json
+import re
 import secrets
 from datetime import UTC, datetime
 from json import JSONDecodeError
@@ -138,14 +139,17 @@ def metrics() -> Response:
 
 
 @app.get("/api/runtime-config")
-def runtime_config() -> dict[str, Any]:
+def runtime_config(request: Request = None) -> dict[str, Any]:
     settings = load_settings()
+    current_user_id = _request_user_id(request)
     return {
         "environment": settings.environment,
         "auth_required": settings.auth_required,
         "metrics_auth_required": settings.metrics_auth_required,
         "artifact_root": str(settings.artifact_root),
         "scenario_config_dir": str(settings.scenario_config_dir),
+        "current_user_id": current_user_id,
+        "user_artifact_root": str(_user_artifact_root(request)) if current_user_id else None,
         "grafana_url": settings.grafana_url,
         "actor_header": settings.actor_header,
         "run_retention_limit": settings.run_retention_limit,
@@ -158,62 +162,78 @@ def dashboard() -> FileResponse:
 
 
 @app.get("/api/reports/scenario")
-def scenario_report() -> dict[str, Any]:
-    return _read_json_artifact(_artifact_path(DEFAULT_REPORT_PATH))
+def scenario_report(request: Request = None) -> dict[str, Any]:
+    return _read_json_artifact(_artifact_path(DEFAULT_REPORT_PATH, request))
 
 
 @app.get("/api/reports/multistep-scenario")
-def multistep_scenario_report() -> dict[str, Any]:
-    return _read_json_artifact(_artifact_path(DEFAULT_MULTISTEP_REPORT_PATH))
+def multistep_scenario_report(request: Request = None) -> dict[str, Any]:
+    return _read_json_artifact(_artifact_path(DEFAULT_MULTISTEP_REPORT_PATH, request))
 
 
 @app.get("/api/reports/benchmark")
-def benchmark_report() -> dict[str, Any]:
-    return _read_json_artifact(ARTIFACT_ROOT / "reports" / "benchmark_report.json")
+def benchmark_report(request: Request = None) -> dict[str, Any]:
+    return _read_json_artifact(_user_artifact_root(request) / "reports" / "benchmark_report.json")
 
 
 @app.get("/api/events/scenario")
-def scenario_events(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
-    return _read_jsonl_artifact(ARTIFACT_ROOT / "events" / "scenario_events.jsonl", limit)
+def scenario_events(
+    limit: int = Query(200, ge=1, le=1000),
+    request: Request = None,
+) -> dict[str, Any]:
+    return _read_jsonl_artifact(_user_artifact_root(request) / "events" / "scenario_events.jsonl", limit)
 
 
 @app.get("/api/events/multistep-scenario")
-def multistep_scenario_events(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
+def multistep_scenario_events(
+    limit: int = Query(200, ge=1, le=1000),
+    request: Request = None,
+) -> dict[str, Any]:
     return _read_jsonl_artifact(
-        ARTIFACT_ROOT / "events" / "multistep_scenario_events.jsonl",
+        _user_artifact_root(request) / "events" / "multistep_scenario_events.jsonl",
         limit,
     )
 
 
 @app.get("/api/audit/scenario")
-def scenario_audit(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
-    return _read_jsonl_artifact(ARTIFACT_ROOT / "audit" / "scenario_audit.jsonl", limit)
+def scenario_audit(
+    limit: int = Query(200, ge=1, le=1000),
+    request: Request = None,
+) -> dict[str, Any]:
+    return _read_jsonl_artifact(_user_artifact_root(request) / "audit" / "scenario_audit.jsonl", limit)
 
 
 @app.get("/api/audit/multistep-scenario")
-def multistep_scenario_audit(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
+def multistep_scenario_audit(
+    limit: int = Query(200, ge=1, le=1000),
+    request: Request = None,
+) -> dict[str, Any]:
     return _read_jsonl_artifact(
-        ARTIFACT_ROOT / "audit" / "multistep_scenario_audit.jsonl",
+        _user_artifact_root(request) / "audit" / "multistep_scenario_audit.jsonl",
         limit,
     )
 
 
 @app.get("/api/history/runs")
-def run_history(limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
-    return RUN_HISTORY.list(limit)
+def run_history(
+    limit: int = Query(50, ge=1, le=500),
+    request: Request = None,
+) -> dict[str, Any]:
+    return _run_history_store(request).list(limit)
 
 
 @app.get("/api/history/runs/{record_id}")
-def run_history_detail(record_id: str) -> dict[str, Any]:
-    payload = RUN_HISTORY.get(record_id)
+def run_history_detail(record_id: str, request: Request = None) -> dict[str, Any]:
+    payload = _run_history_store(request).get(record_id)
     if not payload["available"] and payload.get("record") is None:
         raise HTTPException(status_code=404, detail=payload["error"])
     return payload
 
 
 @app.get("/api/scenarios")
-def scenario_configs() -> dict[str, Any]:
-    return list_scenarios(DEFAULT_SCENARIO_DIR, overlay_scenario_dir=CUSTOM_SCENARIO_DIR)
+def scenario_configs(request: Request = None) -> dict[str, Any]:
+    payload = list_scenarios(DEFAULT_SCENARIO_DIR, overlay_scenario_dir=_user_scenario_dir(request))
+    return _with_user_metadata(payload, request)
 
 
 @app.get("/api/multistep-scenarios")
@@ -222,9 +242,10 @@ def multistep_scenario_configs() -> dict[str, Any]:
 
 
 @app.get("/api/scenarios/{scenario_id}")
-def scenario_detail(scenario_id: str) -> dict[str, Any]:
+def scenario_detail(scenario_id: str, request: Request = None) -> dict[str, Any]:
     try:
-        return get_scenario(scenario_id, overlay_scenario_dir=CUSTOM_SCENARIO_DIR)
+        payload = get_scenario(scenario_id, overlay_scenario_dir=_user_scenario_dir(request))
+        return _with_user_metadata(payload, request)
     except ValueError as exc:
         raise _scenario_http_error(exc) from exc
 
@@ -232,7 +253,8 @@ def scenario_detail(scenario_id: str) -> dict[str, Any]:
 @app.post("/api/scenarios")
 def scenario_create(payload: dict[str, Any], request: Request = None) -> dict[str, Any]:
     try:
-        result = save_scenario(payload, scenario_dir=CUSTOM_SCENARIO_DIR)
+        result = save_scenario(payload, scenario_dir=_user_scenario_dir(request))
+        result = _with_user_metadata(result, request)
         _log_operation(
             request,
             "scenario_create",
@@ -256,9 +278,10 @@ def scenario_update(
         result = update_scenario(
             scenario_id,
             payload,
-            scenario_dir=CUSTOM_SCENARIO_DIR,
+            scenario_dir=_user_scenario_dir(request),
             create_if_missing=True,
         )
+        result = _with_user_metadata(result, request)
         _log_operation(
             request,
             "scenario_update",
@@ -284,7 +307,8 @@ def scenario_update(
 @app.delete("/api/scenarios/{scenario_id}")
 def scenario_delete(scenario_id: str, request: Request = None) -> dict[str, Any]:
     try:
-        result = delete_scenario(scenario_id, scenario_dir=CUSTOM_SCENARIO_DIR)
+        result = delete_scenario(scenario_id, scenario_dir=_user_scenario_dir(request))
+        result = _with_user_metadata(result, request)
         _log_operation(
             request,
             "scenario_delete",
@@ -315,13 +339,14 @@ def smoke_run(request: Request = None) -> dict[str, object]:
 
 @app.post("/runs/scenario")
 def scenario_run(request: Request = None) -> dict[str, Any]:
+    artifact_root = _user_artifact_root(request)
     report = run_scenario_suite(
         DEFAULT_SCENARIO_DIR,
-        ARTIFACT_ROOT / "reports" / "scenario_report.json",
-        artifact_root=ARTIFACT_ROOT,
-        overlay_scenario_dir=CUSTOM_SCENARIO_DIR,
+        artifact_root / "reports" / "scenario_report.json",
+        artifact_root=artifact_root,
+        overlay_scenario_dir=_user_scenario_dir(request),
     )
-    report["history_record"] = RUN_HISTORY.record("scenario", report, run_id=str(report["run_id"]))
+    report["history_record"] = _record_run_history(request, "scenario", report)
     record_scenario_report(report, scope="suite")
     _log_operation(
         request,
@@ -340,12 +365,13 @@ def scenario_run(request: Request = None) -> dict[str, Any]:
 @app.post("/runs/scenario/{scenario_id}")
 def scenario_run_one(scenario_id: str, request: Request = None) -> dict[str, Any]:
     try:
+        artifact_root = _user_artifact_root(request)
         report = run_scenario_case(
             scenario_id,
-            artifact_root=ARTIFACT_ROOT,
-            overlay_scenario_dir=CUSTOM_SCENARIO_DIR,
+            artifact_root=artifact_root,
+            overlay_scenario_dir=_user_scenario_dir(request),
         )
-        report["history_record"] = RUN_HISTORY.record("scenario", report, run_id=str(report["run_id"]))
+        report["history_record"] = _record_run_history(request, "scenario", report)
         record_scenario_report(report, scope=report.get("scenario", {}).get("id", scenario_id))
         _log_operation(
             request,
@@ -369,12 +395,13 @@ def scenario_run_one(scenario_id: str, request: Request = None) -> dict[str, Any
 
 @app.post("/runs/multistep-scenario")
 def multistep_scenario_run(request: Request = None) -> dict[str, Any]:
+    artifact_root = _user_artifact_root(request)
     report = run_multistep_suite(
         DEFAULT_MULTISTEP_SCENARIO_DIR,
-        ARTIFACT_ROOT / "reports" / "multistep_scenario_report.json",
-        artifact_root=ARTIFACT_ROOT,
+        artifact_root / "reports" / "multistep_scenario_report.json",
+        artifact_root=artifact_root,
     )
-    report["history_record"] = RUN_HISTORY.record("scenario", report, run_id=str(report["run_id"]))
+    report["history_record"] = _record_run_history(request, "scenario", report)
     record_scenario_report(report, scope="multistep-suite")
     _log_operation(
         request,
@@ -396,9 +423,12 @@ def multistep_scenario_run_one(
     request: Request = None,
 ) -> dict[str, Any]:
     try:
-        report = run_multistep_scenario_case(scenario_id, artifact_root=ARTIFACT_ROOT)
+        report = run_multistep_scenario_case(
+            scenario_id,
+            artifact_root=_user_artifact_root(request),
+        )
         scope = report.get("scenario", {}).get("id", scenario_id)
-        report["history_record"] = RUN_HISTORY.record("scenario", report, run_id=str(report["run_id"]))
+        report["history_record"] = _record_run_history(request, "scenario", report)
         record_scenario_report(report, scope=f"multistep-{scope}")
         _log_operation(
             request,
@@ -422,11 +452,12 @@ def multistep_scenario_run_one(
 
 @app.post("/runs/benchmark")
 def benchmark_run(request: Request = None) -> dict[str, object]:
+    artifact_root = _user_artifact_root(request)
     report = run_latency_benchmark(
-        report_path=ARTIFACT_ROOT / "reports" / "benchmark_report.json",
-        artifact_root=ARTIFACT_ROOT,
+        report_path=artifact_root / "reports" / "benchmark_report.json",
+        artifact_root=artifact_root,
     )
-    report["history_record"] = RUN_HISTORY.record("benchmark", report, run_id=str(report["run_id"]))
+    report["history_record"] = _record_run_history(request, "benchmark", report)
     record_benchmark_report(report)
     _log_operation(
         request,
@@ -443,8 +474,8 @@ def benchmark_run(request: Request = None) -> dict[str, object]:
 
 @app.post("/benchmarks/latency")
 def latency_benchmark(request: Request = None) -> dict[str, object]:
-    report = run_latency_benchmark(artifact_root=ARTIFACT_ROOT)
-    report["history_record"] = RUN_HISTORY.record("benchmark", report, run_id=str(report["run_id"]))
+    report = run_latency_benchmark(artifact_root=_user_artifact_root(request))
+    report["history_record"] = _record_run_history(request, "benchmark", report)
     record_benchmark_report(report)
     _log_operation(
         request,
@@ -483,6 +514,94 @@ def _source_ip(request: Request) -> str:
     if forwarded_for:
         return forwarded_for
     return request.client.host if request.client else "unknown"
+
+
+def _request_user_id(request: Request | None) -> str | None:
+    if request is None:
+        return None
+
+    request_state = getattr(request, "state", None)
+    actor = str(getattr(request_state, "actor", "") or "").strip()
+    if not actor:
+        actor = _request_actor(request, load_settings())
+
+    user_id = _safe_user_id(actor)
+    if user_id in {"", "anonymous", "token-authenticated", "token_authenticated"}:
+        return None
+    return user_id
+
+
+def _safe_user_id(raw_id: str) -> str:
+    lowered = raw_id.strip().lower()
+    cleaned = re.sub(r"[^a-z0-9_.-]+", "-", lowered)
+    cleaned = re.sub(r"-+", "-", cleaned).strip(".-")
+    return cleaned
+
+
+def _user_artifact_root(request: Request | None) -> Path:
+    user_id = _request_user_id(request)
+    if user_id is None:
+        return ARTIFACT_ROOT
+    return ARTIFACT_ROOT / "users" / user_id
+
+
+def _user_scenario_dir(request: Request | None) -> Path:
+    user_id = _request_user_id(request)
+    if user_id is None:
+        return CUSTOM_SCENARIO_DIR
+    return _user_artifact_root(request) / "configs" / "scenarios"
+
+
+def _run_history_store(request: Request | None) -> RunHistoryStore:
+    if _request_user_id(request) is None:
+        return RUN_HISTORY
+    settings = load_settings()
+    return RunHistoryStore(_user_artifact_root(request), retention_limit=settings.run_retention_limit)
+
+
+def _record_run_history(
+    request: Request | None,
+    run_type: str,
+    report: dict[str, Any],
+) -> dict[str, Any]:
+    user_id = _request_user_id(request)
+    actor = None if request is None else getattr(request.state, "actor", _request_actor(request, load_settings()))
+    return _run_history_store(request).record(
+        run_type,
+        report,
+        run_id=str(report["run_id"]),
+        owner_user_id=user_id,
+        actor=actor,
+        visibility="private" if user_id else "shared",
+    )
+
+
+def _with_user_metadata(payload: dict[str, Any], request: Request | None) -> dict[str, Any]:
+    user_id = _request_user_id(request)
+    if user_id is None:
+        return payload
+
+    enriched = dict(payload)
+    enriched["owner_user_id"] = user_id
+    enriched["storage_scope"] = "user"
+    scenarios = enriched.get("scenarios")
+    if isinstance(scenarios, list):
+        enriched["scenarios"] = [
+            {
+                **scenario,
+                **({"owner_user_id": user_id} if scenario.get("source") == "custom" else {}),
+            }
+            for scenario in scenarios
+            if isinstance(scenario, dict)
+        ]
+    if enriched.get("source") == "custom":
+        enriched["owner_user_id"] = user_id
+    scenario = enriched.get("scenario")
+    if isinstance(scenario, dict) and (
+        enriched.get("source") == "custom" or enriched.get("saved") or enriched.get("updated")
+    ):
+        enriched["scenario"] = {**scenario, "owner_user_id": user_id}
+    return enriched
 
 
 def _is_critical_operation(request: Request) -> bool:
@@ -585,12 +704,13 @@ def _request_token(request: Request) -> str:
     return ""
 
 
-def _artifact_path(default_path: Path) -> Path:
+def _artifact_path(default_path: Path, request: Request | None = None) -> Path:
+    artifact_root = _user_artifact_root(request)
     if default_path.is_absolute():
         return default_path
     if default_path.parts and default_path.parts[0] == "artifacts":
-        return ARTIFACT_ROOT.joinpath(*default_path.parts[1:])
-    return ARTIFACT_ROOT / default_path
+        return artifact_root.joinpath(*default_path.parts[1:])
+    return artifact_root / default_path
 
 
 def _read_json_artifact(path: Path) -> dict[str, Any]:
