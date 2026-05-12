@@ -15,9 +15,12 @@ def test_latency_benchmark_writes_quality_report(tmp_path: Path) -> None:
     report = run_latency_benchmark(
         steps=3,
         report_path=report_path,
+        artifact_root=tmp_path,
         max_module_p95_ms=1000.0,
+        run_id="benchmark-test-run",
     )
 
+    assert report["run_id"] == "benchmark-test-run"
     assert report["steps"] == 3
     assert report["audit_valid"] is True
     assert report["quality_gate_passed"] is True
@@ -26,3 +29,9 @@ def test_latency_benchmark_writes_quality_report(tmp_path: Path) -> None:
     assert "seom" in report["module_latency_ms"]
     assert report["module_latency_ms"]["seom"]["p95"] >= 0.0
     assert json.loads(report_path.read_text())["quality_gate_passed"] is True
+    assert (tmp_path / "runs/benchmark-test-run/benchmark_report.json").exists()
+    assert (tmp_path / "runs/benchmark-test-run/benchmark_events.jsonl").exists()
+    assert (tmp_path / "runs/benchmark-test-run/benchmark_audit.jsonl").exists()
+    assert "benchmark-test-run" in (
+        tmp_path / "runs/benchmark-test-run/benchmark_audit.jsonl"
+    ).read_text()

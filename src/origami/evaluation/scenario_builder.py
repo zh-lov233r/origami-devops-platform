@@ -6,6 +6,7 @@ English: Scenario Manager utilities for listing, reading, saving, updating, and 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -16,15 +17,18 @@ DEFAULT_SCENARIO_DIR = Path("configs/scenarios")
 _SCENARIO_ID_PATTERN = re.compile(r"[^a-z0-9_-]+")
 
 
-def list_scenarios(scenario_dir: Path | str = DEFAULT_SCENARIO_DIR) -> dict[str, Any]:
+def list_scenarios(
+    scenario_dir: Path | str = DEFAULT_SCENARIO_DIR,
+    overlay_scenario_dir: Path | str | None = None,
+) -> dict[str, Any]:
     """List scenario YAML files with compact metadata for the dashboard."""
-    root = Path(scenario_dir)
-    if not root.exists():
-        return {"available": False, "path": str(root), "count": 0, "scenarios": []}
+    roots = _scenario_roots(scenario_dir, overlay_scenario_dir)
+    if not any(root.exists() for root in roots):
+        return {"available": False, "path": str(roots[0]), "count": 0, "scenarios": []}
 
     scenarios: list[dict[str, Any]] = []
     parse_errors: list[dict[str, Any]] = []
-    for path in sorted(root.glob("*.yaml")):
+    for path, source in _scenario_files(roots).values():
         try:
             loaded = yaml.safe_load(path.read_text())
         except yaml.YAMLError as exc:
@@ -40,12 +44,15 @@ def list_scenarios(scenario_dir: Path | str = DEFAULT_SCENARIO_DIR) -> dict[str,
                 "description": loaded.get("description", ""),
                 "tags": loaded.get("tags", []),
                 "path": str(path),
+                "source": source,
+                "delete_allowed": source == "custom",
             }
         )
 
     payload: dict[str, Any] = {
         "available": not parse_errors,
-        "path": str(root),
+        "path": str(roots[0]),
+        "overlay_path": str(roots[1]) if len(roots) > 1 else None,
         "count": len(scenarios),
         "scenarios": scenarios,
     }
@@ -85,9 +92,10 @@ def save_scenario(
 def get_scenario(
     scenario_id: str,
     scenario_dir: Path | str = DEFAULT_SCENARIO_DIR,
+    overlay_scenario_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Load one scenario YAML file for dashboard editing."""
-    path = _scenario_path(scenario_id, scenario_dir)
+    path, source = _resolve_scenario_path(scenario_id, scenario_dir, overlay_scenario_dir)
     if not path.exists():
         raise ValueError(f"Scenario not found: {path}")
 
@@ -101,6 +109,8 @@ def get_scenario(
     return {
         "available": True,
         "path": str(path),
+        "source": source,
+        "delete_allowed": source == "custom",
         "scenario": loaded,
     }
 
@@ -109,10 +119,11 @@ def update_scenario(
     scenario_id: str,
     payload: dict[str, Any],
     scenario_dir: Path | str = DEFAULT_SCENARIO_DIR,
+    create_if_missing: bool = False,
 ) -> dict[str, Any]:
     """Update an existing scenario, allowing safe id renames."""
     current_path = _scenario_path(scenario_id, scenario_dir)
-    if not current_path.exists():
+    if not current_path.exists() and not create_if_missing:
         raise ValueError(f"Scenario not found: {current_path}")
 
     scenario = _normalize_scenario_payload({**payload, "overwrite": True})
@@ -121,7 +132,7 @@ def update_scenario(
         raise ValueError(f"Scenario already exists: {output_path}")
 
     _write_scenario(output_path, scenario)
-    if output_path != current_path:
+    if current_path.exists() and output_path != current_path:
         current_path.unlink()
 
     return {
@@ -136,6 +147,14 @@ def update_scenario(
             "description": scenario["description"],
         },
     }
+
+
+def scenario_file_paths(
+    scenario_dir: Path | str = DEFAULT_SCENARIO_DIR,
+    overlay_scenario_dir: Path | str | None = None,
+) -> list[Path]:
+    """Return deduplicated scenario paths with overlay files taking precedence."""
+    return [path for path, _source in _scenario_files(_scenario_roots(scenario_dir, overlay_scenario_dir)).values()]
 
 
 def delete_scenario(
@@ -160,6 +179,43 @@ def _scenario_path(scenario_id: str, scenario_dir: Path | str) -> Path:
     if not safe_id:
         raise ValueError("Scenario id is required")
     return Path(scenario_dir) / f"{safe_id}.yaml"
+
+
+def _resolve_scenario_path(
+    scenario_id: str,
+    scenario_dir: Path | str,
+    overlay_scenario_dir: Path | str | None,
+) -> tuple[Path, str]:
+    safe_id = _safe_scenario_id(str(scenario_id))
+    if not safe_id:
+        raise ValueError("Scenario id is required")
+    files = _scenario_files(_scenario_roots(scenario_dir, overlay_scenario_dir))
+    found = files.get(safe_id)
+    if found is not None:
+        return found
+    return _scenario_path(safe_id, overlay_scenario_dir or scenario_dir), "custom"
+
+
+def _scenario_roots(
+    scenario_dir: Path | str,
+    overlay_scenario_dir: Path | str | None,
+) -> list[Path]:
+    roots = [Path(scenario_dir)]
+    if overlay_scenario_dir is not None:
+        roots.append(Path(overlay_scenario_dir))
+    return roots
+
+
+def _scenario_files(roots: Iterable[Path]) -> dict[str, tuple[Path, str]]:
+    files: dict[str, tuple[Path, str]] = {}
+    root_list = list(roots)
+    for index, root in enumerate(root_list):
+        if not root.exists():
+            continue
+        source = "custom" if index == len(root_list) - 1 and len(root_list) > 1 else "built_in"
+        for path in sorted(root.glob("*.yaml")):
+            files[_safe_scenario_id(path.stem)] = (path, source)
+    return dict(sorted(files.items()))
 
 
 def _write_scenario(path: Path, scenario: dict[str, Any]) -> None:

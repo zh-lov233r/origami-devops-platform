@@ -113,6 +113,7 @@ v0.1 上线成功意味着平台可以作为内部开发者仿真验证服务稳
 - 增加文件锁或任务队列，避免并发运行写同一个 report/audit/event 文件。
 - 将 audit/history 从“最新文件视图”升级为稳定索引，v0.1 可用 SQLite 或 append-only JSONL。
 - 增加 artifact retention policy，例如保留最近 30 天或最近 500 次运行。
+- 将 Dashboard 自定义场景写入持久 artifact/config 目录，生产镜像内置 `configs/scenarios` 保持只读。
 - 增加结构化错误响应和输入 schema，减少宽松 `dict[str, Any]` 造成的无效运行。
 
 验收标准：
@@ -205,19 +206,21 @@ v0.1 上线成功意味着平台可以作为内部开发者仿真验证服务稳
 
 ### Reliability
 
-- [ ] 每次运行有唯一 run id。
-- [ ] 并发运行不会覆盖 artifact。
-- [ ] 历史 run 可以追溯输入、输出、事件和 audit。
-- [ ] artifact retention policy 已启用。
+- [x] 每次运行有唯一 run id。
+- [x] 并发运行不会覆盖 artifact。
+- [x] 历史 run 可以追溯输入、输出、事件和 audit。
+- [x] artifact retention policy 已启用。
+- [x] Dashboard 自定义场景写入持久配置目录，不修改生产镜像内置场景。
 - [ ] 回滚流程已验证。
 
 ### Quality
 
-- [ ] `make quality` 通过。
-- [ ] scenario suite 通过。
-- [ ] multi-step scenario suite 通过。
-- [ ] benchmark quality gate 通过。
-- [ ] audit verification 通过。
+- [x] `make quality` 通过。
+- [x] scenario suite 通过。
+- [x] multi-step scenario suite 通过。
+- [x] benchmark quality gate 通过。
+- [x] audit verification 通过。
+- [x] 本地 production compose smoke check 通过：API healthy、自定义场景创建和运行。
 - [ ] staging smoke check 通过。
 
 ### Operations

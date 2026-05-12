@@ -25,6 +25,7 @@ from origami.evaluation.scenario_runner import (
     _violation_analysis,
 )
 from origami.persistence.artifact_store import ArtifactStore
+from origami.persistence.run_history import new_run_id, safe_run_id
 
 
 DEFAULT_MULTISTEP_SCENARIO_DIR = Path("configs/multistep_scenarios")
@@ -84,13 +85,15 @@ def run_multistep_suite(
     scenario_dir: Path | str = DEFAULT_MULTISTEP_SCENARIO_DIR,
     report_path: Path | str | None = None,
     artifact_root: Path | str | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     """Run all multi-step scenario YAML files in a directory."""
+    resolved_run_id = safe_run_id(run_id) if run_id else new_run_id("multistep-scenario")
     scenario_path = Path(scenario_dir)
     scenario_files = sorted([*scenario_path.glob("*.yaml"), *scenario_path.glob("*.yml")])
     cases = [_load_multistep_scenario(path) for path in scenario_files]
-    scenario_results = [_run_multistep_case(case) for case in cases]
-    report = _build_multistep_report(scenario_results)
+    scenario_results = [_run_multistep_case(case, resolved_run_id) for case in cases]
+    report = _build_multistep_report(scenario_results, resolved_run_id)
 
     if artifact_root is not None:
         _persist_multistep_artifacts(ArtifactStore(artifact_root), report, scenario_results)
@@ -113,15 +116,20 @@ def run_default_multistep_suite() -> dict[str, Any]:
 def run_multistep_scenario_case(
     scenario_id: str,
     scenario_dir: Path | str = DEFAULT_MULTISTEP_SCENARIO_DIR,
+    artifact_root: Path | str | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     """Run one multi-step scenario YAML file and return a suite-shaped report."""
+    resolved_run_id = safe_run_id(run_id) if run_id else new_run_id("multistep-scenario")
     scenario_path = _multistep_case_path(scenario_id, scenario_dir)
     if not scenario_path.exists():
         raise ValueError(f"Multi-step scenario not found: {scenario_path}")
 
-    result = _run_multistep_case(_load_multistep_scenario(scenario_path))
-    report = _build_multistep_report([result])
+    result = _run_multistep_case(_load_multistep_scenario(scenario_path), resolved_run_id)
+    report = _build_multistep_report([result], resolved_run_id)
     report["scenario"] = _report_multistep_scenario(result)
+    if artifact_root is not None:
+        _persist_multistep_artifacts(ArtifactStore(artifact_root), report, [result])
     return report
 
 
@@ -210,9 +218,9 @@ def _configured_step_count(steps: list[Any]) -> int:
     return total
 
 
-def _run_multistep_case(case: dict[str, Any]) -> dict[str, Any]:
+def _run_multistep_case(case: dict[str, Any], run_id: str) -> dict[str, Any]:
     scenario_id = str(case["id"])
-    pipeline = PIC2Pipeline(run_id=scenario_id)
+    pipeline = PIC2Pipeline(run_id=run_id)
     current_observation = deepcopy(case.get("initial_observation", case.get("observation", {})))
     previous_action: dict[str, Any] | None = None
     step_results: list[dict[str, Any]] = []
@@ -545,13 +553,17 @@ def _multistep_event_records(
     ]
 
 
-def _build_multistep_report(scenario_results: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_multistep_report(
+    scenario_results: list[dict[str, Any]],
+    run_id: str,
+) -> dict[str, Any]:
     total = len(scenario_results)
     passed = sum(1 for result in scenario_results if result["passed"])
     failed = total - passed
     total_steps = sum(result["total_steps"] for result in scenario_results)
     failed_steps = sum(result["failed_steps"] for result in scenario_results)
     return {
+        "run_id": run_id,
         "generated_at": datetime.now(UTC).isoformat(),
         "suite": "carry_go_multistep",
         "total": total,
@@ -610,7 +622,24 @@ def _persist_multistep_artifacts(
         for record in scenario["audit_records"]
     ]
 
+    run_dir = Path("runs") / str(report["run_id"])
     paths = {
+        "json_report": store.write_json(run_dir / "multistep_scenario_report.json", report),
+        "markdown_report": store.write_text(
+            run_dir / "multistep_scenario_report.md",
+            _markdown_multistep_report(report),
+        ),
+        "event_log": store.write_jsonl(
+            run_dir / "multistep_scenario_events.jsonl",
+            event_records,
+        ),
+        "audit_log": store.write_jsonl(
+            run_dir / "multistep_scenario_audit.jsonl",
+            audit_records,
+        ),
+    }
+    latest_paths = {
+        "json_report": store.write_json("reports/multistep_scenario_report.json", report),
         "markdown_report": store.write_text(
             "reports/multistep_scenario_report.md",
             _markdown_multistep_report(report),
@@ -619,6 +648,8 @@ def _persist_multistep_artifacts(
         "audit_log": store.write_jsonl("audit/multistep_scenario_audit.jsonl", audit_records),
     }
     report["artifacts"] = {name: str(path) for name, path in paths.items()}
+    report["latest_artifacts"] = {name: str(path) for name, path in latest_paths.items()}
+    store.write_json(run_dir / "multistep_scenario_report.json", report)
     store.write_json("reports/multistep_scenario_report.json", report)
     return report["artifacts"]
 

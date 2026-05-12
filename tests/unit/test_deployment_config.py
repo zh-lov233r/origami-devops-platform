@@ -18,6 +18,7 @@ def test_production_dockerfile_uses_locked_non_root_runtime() -> None:
     assert "ARG PYTHON_IMAGE=python:3.11.13-slim-bookworm" in dockerfile
     assert "ARG UV_VERSION=0.11.8" in dockerfile
     assert "uv export --locked --no-dev --format requirements-txt" in dockerfile
+    assert "COPY --chown=origami:origami configs ./configs" in dockerfile
     assert "COPY --chown=origami:origami src ./src" in dockerfile
     assert "ENV ORIGAMI_ARTIFACT_ROOT=/var/lib/origami/artifacts" in dockerfile
     assert "USER origami" in dockerfile
@@ -73,3 +74,11 @@ def test_production_grafana_and_env_example_require_controlled_credentials() -> 
     )
     assert "ORIGAMI_API_TOKEN=replace-with-internal-token" in env_example
     assert "GRAFANA_ADMIN_PASSWORD=replace-with-strong-password" in env_example
+    assert "ORIGAMI_RUN_RETENTION_LIMIT=500" in env_example
+    assert "ORIGAMI_SCENARIO_CONFIG_DIR=/var/lib/origami/artifacts/configs/scenarios" in env_example
+    assert compose["services"]["api"]["environment"]["ORIGAMI_RUN_RETENTION_LIMIT"] == (
+        "${ORIGAMI_RUN_RETENTION_LIMIT:-500}"
+    )
+    assert compose["services"]["api"]["environment"]["ORIGAMI_SCENARIO_CONFIG_DIR"] == (
+        "${ORIGAMI_SCENARIO_CONFIG_DIR:-/var/lib/origami/artifacts/configs/scenarios}"
+    )

@@ -3,6 +3,7 @@
 .pytest_cache
 .ruff_cache
 .uv-cache
+.locks
 .venv
 .env
 .env.*
@@ -11,6 +12,7 @@
 __pycache__
 *.egg-info
 artifacts
+artifacts/.locks
 dist
 build
 *.pyc

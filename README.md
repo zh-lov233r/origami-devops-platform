@@ -93,6 +93,24 @@ docker compose --env-file .env.production -f docker-compose.prod.yml logs -f api
 docker compose --env-file .env.production -f docker-compose.prod.yml down
 ```
 
+## Run Artifacts
+
+Scenario, multi-step scenario, and benchmark runs now receive a unique `run_id`.
+Each run writes an immutable artifact bundle under `artifacts/runs/<run_id>/` with
+the report, event log, and audit log for that run. The files under
+`artifacts/reports`, `artifacts/events`, and `artifacts/audit` remain as latest
+views for the Dashboard and CLI.
+
+Dashboard-triggered runs are indexed in `artifacts/history/runs.jsonl`; each
+history record points back to its run directory and full `report.json` snapshot.
+Set `ORIGAMI_RUN_RETENTION_LIMIT` to control how many run bundles are retained
+by the API, defaulting to `500`.
+
+Dashboard-created scenario YAML is stored under `ORIGAMI_SCENARIO_CONFIG_DIR`,
+which defaults to `artifacts/configs/scenarios`. The built-in scenario files in
+`configs/scenarios` remain read-only inputs, and custom files overlay them at
+list and run time.
+
 ## Continuous Integration
 
 GitHub Actions runs the project quality gates on every push and pull request:

@@ -17,6 +17,7 @@ class OrigamiSettings:
 
     environment: str
     artifact_root: Path
+    scenario_config_dir: Path
     grafana_url: str
     log_level: str
     allowed_origins: tuple[str, ...]
@@ -25,6 +26,7 @@ class OrigamiSettings:
     api_token: str
     auth_required: bool
     metrics_auth_required: bool
+    run_retention_limit: int
 
 
 def load_settings(environ: Mapping[str, str] | None = None) -> OrigamiSettings:
@@ -36,10 +38,14 @@ def load_settings(environ: Mapping[str, str] | None = None) -> OrigamiSettings:
     """
     env = os.environ if environ is None else environ
     api_token = env.get("ORIGAMI_API_TOKEN", "").strip()
+    artifact_root = Path(env.get("ORIGAMI_ARTIFACT_ROOT", "artifacts"))
 
     return OrigamiSettings(
         environment=env.get("ORIGAMI_ENV", "local").strip() or "local",
-        artifact_root=Path(env.get("ORIGAMI_ARTIFACT_ROOT", "artifacts")),
+        artifact_root=artifact_root,
+        scenario_config_dir=Path(
+            env.get("ORIGAMI_SCENARIO_CONFIG_DIR", str(artifact_root / "configs" / "scenarios"))
+        ),
         grafana_url=(
             env.get("ORIGAMI_GRAFANA_URL", "http://127.0.0.1:3000/d/origami-overview?orgId=1")
             .strip()
@@ -59,6 +65,11 @@ def load_settings(environ: Mapping[str, str] | None = None) -> OrigamiSettings:
             env.get("ORIGAMI_METRICS_AUTH_REQUIRED"),
             default=False,
         ),
+        run_retention_limit=_int_env(
+            env.get("ORIGAMI_RUN_RETENTION_LIMIT"),
+            default=500,
+            minimum=1,
+        ),
     )
 
 
@@ -76,3 +87,15 @@ def _bool_env(value: str | None, default: bool) -> bool:
 
 def _csv_env(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+def _int_env(value: str | None, default: int, minimum: int | None = None) -> int:
+    if value is None:
+        return default
+    try:
+        parsed = int(value.strip())
+    except ValueError:
+        return default
+    if minimum is not None and parsed < minimum:
+        return default
+    return parsed

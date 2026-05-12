@@ -15,7 +15,9 @@ from typing import Any
 import yaml
 
 from origami.core.pipeline import PIC2Pipeline, PipelineResult
+from origami.evaluation.scenario_builder import scenario_file_paths
 from origami.persistence.artifact_store import ArtifactStore
+from origami.persistence.run_history import new_run_id, safe_run_id
 
 
 DEFAULT_SCENARIO_DIR = Path("configs/scenarios")
@@ -27,12 +29,17 @@ def run_scenario_suite(
     scenario_dir: Path | str = DEFAULT_SCENARIO_DIR,
     report_path: Path | str | None = None,
     artifact_root: Path | str | None = None,
+    run_id: str | None = None,
+    overlay_scenario_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Run all scenario YAML files in a directory and optionally persist a JSON report."""
-    scenario_path = Path(scenario_dir)
-    cases = [_load_scenario(path) for path in sorted(scenario_path.glob("*.yaml"))]
-    scenario_results = [_run_case(case) for case in cases]
-    report = _build_report(scenario_results)
+    resolved_run_id = safe_run_id(run_id) if run_id else new_run_id("scenario")
+    cases = [
+        _load_scenario(path)
+        for path in scenario_file_paths(scenario_dir, overlay_scenario_dir)
+    ]
+    scenario_results = [_run_case(case, resolved_run_id) for case in cases]
+    report = _build_report(scenario_results, resolved_run_id)
 
     if artifact_root is not None:
         _persist_suite_artifacts(ArtifactStore(artifact_root), report, scenario_results)
@@ -55,23 +62,36 @@ def run_default_scenario_suite() -> dict[str, Any]:
 def run_scenario_case(
     scenario_id: str,
     scenario_dir: Path | str = DEFAULT_SCENARIO_DIR,
+    artifact_root: Path | str | None = None,
+    run_id: str | None = None,
+    overlay_scenario_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Run one scenario YAML file and return a compact single-case report."""
-    scenario_path = _scenario_case_path(scenario_id, scenario_dir)
+    resolved_run_id = safe_run_id(run_id) if run_id else new_run_id("scenario")
+    scenario_path = _scenario_case_path(scenario_id, scenario_dir, overlay_scenario_dir)
     if not scenario_path.exists():
         raise ValueError(f"Scenario not found: {scenario_path}")
 
-    result = _run_case(_load_scenario(scenario_path))
-    report = _build_report([result])
+    result = _run_case(_load_scenario(scenario_path), resolved_run_id)
+    report = _build_report([result], resolved_run_id)
     report["scenario"] = _report_scenario(result)
+    if artifact_root is not None:
+        _persist_suite_artifacts(ArtifactStore(artifact_root), report, [result])
     return report
 
 
-def _scenario_case_path(scenario_id: str, scenario_dir: Path | str) -> Path:
+def _scenario_case_path(
+    scenario_id: str,
+    scenario_dir: Path | str,
+    overlay_scenario_dir: Path | str | None = None,
+) -> Path:
     safe_id = _safe_scenario_id(str(scenario_id))
     if not safe_id:
         raise ValueError("Scenario id is required")
-    return Path(scenario_dir) / f"{safe_id}.yaml"
+    for path in scenario_file_paths(scenario_dir, overlay_scenario_dir):
+        if _safe_scenario_id(path.stem) == safe_id:
+            return path
+    return Path(overlay_scenario_dir or scenario_dir) / f"{safe_id}.yaml"
 
 
 def _safe_scenario_id(raw_id: str) -> str:
@@ -89,9 +109,9 @@ def _load_scenario(path: Path) -> dict[str, Any]:
     return loaded
 
 
-def _run_case(case: dict[str, Any]) -> dict[str, Any]:
+def _run_case(case: dict[str, Any], run_id: str) -> dict[str, Any]:
     scenario_id = str(case["id"])
-    pipeline = PIC2Pipeline(run_id=scenario_id)
+    pipeline = PIC2Pipeline(run_id=run_id)
     result = pipeline.step(case["observation"])
     actual = _extract_actual(result)
     expected = case.get("expected", {})
@@ -250,12 +270,13 @@ def _safety_signal_check(analysis: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _build_report(scenario_results: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_report(scenario_results: list[dict[str, Any]], run_id: str) -> dict[str, Any]:
     total = len(scenario_results)
     passed = sum(1 for result in scenario_results if result["passed"])
     failed = total - passed
     latencies = _latency_summary(scenario_results)
     return {
+        "run_id": run_id,
         "generated_at": datetime.now(UTC).isoformat(),
         "suite": "carry_go",
         "total": total,
@@ -291,7 +312,18 @@ def _persist_suite_artifacts(
         for record in scenario["audit_records"]
     ]
 
+    run_dir = Path("runs") / str(report["run_id"])
     paths = {
+        "json_report": store.write_json(run_dir / "scenario_report.json", report),
+        "markdown_report": store.write_text(
+            run_dir / "scenario_report.md",
+            _markdown_report(report),
+        ),
+        "event_log": store.write_jsonl(run_dir / "scenario_events.jsonl", event_records),
+        "audit_log": store.write_jsonl(run_dir / "scenario_audit.jsonl", audit_records),
+    }
+    latest_paths = {
+        "json_report": store.write_json("reports/scenario_report.json", report),
         "markdown_report": store.write_text(
             "reports/scenario_report.md",
             _markdown_report(report),
@@ -300,6 +332,8 @@ def _persist_suite_artifacts(
         "audit_log": store.write_jsonl("audit/scenario_audit.jsonl", audit_records),
     }
     report["artifacts"] = {name: str(path) for name, path in paths.items()}
+    report["latest_artifacts"] = {name: str(path) for name, path in latest_paths.items()}
+    store.write_json(run_dir / "scenario_report.json", report)
     store.write_json("reports/scenario_report.json", report)
     return report["artifacts"]
 

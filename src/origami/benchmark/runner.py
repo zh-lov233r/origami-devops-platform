@@ -5,25 +5,32 @@ English: Latency benchmark runner that repeatedly executes the pipeline, summari
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean, median
+from typing import Any
 
 from origami.core.pipeline import PIC2Pipeline
+from origami.persistence.artifact_store import ArtifactStore
+from origami.persistence.run_history import new_run_id, safe_run_id
 
 
 DEFAULT_BENCHMARK_REPORT_PATH = Path("artifacts/reports/benchmark_report.json")
+DEFAULT_BENCHMARK_ARTIFACT_ROOT = Path("artifacts")
 
 
 def run_latency_benchmark(
     steps: int = 20,
     report_path: Path | str | None = None,
+    artifact_root: Path | str | None = None,
     max_module_p95_ms: float = 50.0,
+    run_id: str | None = None,
 ) -> dict[str, object]:
     """Run a deterministic latency benchmark and optionally write a JSON report."""
-    pipeline = PIC2Pipeline(run_id="benchmark")
+    resolved_run_id = safe_run_id(run_id) if run_id else new_run_id("benchmark")
+    pipeline = PIC2Pipeline(run_id=resolved_run_id)
     module_latencies: dict[str, list[float]] = {}
+    event_records: list[dict[str, Any]] = []
 
     for step in range(steps):
         result = pipeline.step(
@@ -45,8 +52,16 @@ def run_latency_benchmark(
         )
         for event in result.events:
             module_latencies.setdefault(event.module, []).append(event.latency_ms)
+            event_records.append(
+                {
+                    "run_id": resolved_run_id,
+                    "step": result.step,
+                    **event.to_dict(),
+                }
+            )
 
     audit_valid = pipeline.audit.verify()[0]
+    audit_records = [entry.data for entry in pipeline.audit.entries]
     module_summary = {
         module: _latency_summary(values)
         for module, values in sorted(module_latencies.items())
@@ -57,6 +72,7 @@ def run_latency_benchmark(
     )
 
     report: dict[str, object] = {
+        "run_id": resolved_run_id,
         "generated_at": datetime.now(UTC).isoformat(),
         "steps": steps,
         "thresholds": {"max_module_p95_ms": max_module_p95_ms},
@@ -68,17 +84,50 @@ def run_latency_benchmark(
         "quality_gate_passed": quality_gate_passed,
     }
 
+    if artifact_root is not None:
+        _persist_benchmark_artifacts(
+            ArtifactStore(artifact_root),
+            report,
+            event_records,
+            audit_records,
+        )
+
     if report_path is not None:
-        output_path = Path(report_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(report, indent=2, sort_keys=True))
+        ArtifactStore(".").write_json(report_path, report)
 
     return report
 
 
 def run_default_latency_benchmark() -> dict[str, object]:
     """Run the default benchmark and write the standard report artifact."""
-    return run_latency_benchmark(report_path=DEFAULT_BENCHMARK_REPORT_PATH)
+    return run_latency_benchmark(
+        report_path=DEFAULT_BENCHMARK_REPORT_PATH,
+        artifact_root=DEFAULT_BENCHMARK_ARTIFACT_ROOT,
+    )
+
+
+def _persist_benchmark_artifacts(
+    store: ArtifactStore,
+    report: dict[str, object],
+    event_records: list[dict[str, Any]],
+    audit_records: list[dict[str, Any]],
+) -> dict[str, str]:
+    run_dir = Path("runs") / str(report["run_id"])
+    paths = {
+        "json_report": store.write_json(run_dir / "benchmark_report.json", report),
+        "event_log": store.write_jsonl(run_dir / "benchmark_events.jsonl", event_records),
+        "audit_log": store.write_jsonl(run_dir / "benchmark_audit.jsonl", audit_records),
+    }
+    latest_paths = {
+        "json_report": store.write_json("reports/benchmark_report.json", report),
+        "event_log": store.write_jsonl("events/benchmark_events.jsonl", event_records),
+        "audit_log": store.write_jsonl("audit/benchmark_audit.jsonl", audit_records),
+    }
+    report["artifacts"] = {name: str(path) for name, path in paths.items()}
+    report["latest_artifacts"] = {name: str(path) for name, path in latest_paths.items()}
+    store.write_json(run_dir / "benchmark_report.json", report)
+    store.write_json("reports/benchmark_report.json", report)
+    return report["artifacts"]
 
 
 def _latency_summary(values: list[float]) -> dict[str, float]:

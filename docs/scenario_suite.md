@@ -38,6 +38,7 @@ The runner writes these default artifacts:
 - `artifacts/reports/scenario_report.md`: human-readable summary table
 - `artifacts/events/scenario_events.jsonl`: per-module latency events
 - `artifacts/audit/scenario_audit.jsonl`: tamper-evident audit chain entries
+- `artifacts/runs/<run_id>/`: immutable per-run report, events, and audit bundle
 
 ## Multi-Step Scenarios
 
@@ -81,6 +82,9 @@ The runner writes:
 - `artifacts/reports/multistep_scenario_report.md`
 - `artifacts/events/multistep_scenario_events.jsonl`
 - `artifacts/audit/multistep_scenario_audit.jsonl`
+- `artifacts/runs/<run_id>/multistep_scenario_report.json`
+- `artifacts/runs/<run_id>/multistep_scenario_events.jsonl`
+- `artifacts/runs/<run_id>/multistep_scenario_audit.jsonl`
 
 The dashboard Test Lab can run the full multi-step timeline suite or one
 selected timeline through the Multi-Step Timeline card.

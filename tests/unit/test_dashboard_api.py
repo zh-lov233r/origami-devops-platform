@@ -6,6 +6,7 @@ English: Unit tests for the dashboard API ensuring the artifact dashboard page a
 from pathlib import Path
 
 from origami.api.app import (
+    _artifact_path,
     app,
     benchmark_run,
     benchmark_report,
@@ -107,6 +108,15 @@ def test_dashboard_report_endpoints_return_artifact_payloads() -> None:
     assert {"available", "path", "data"} <= set(benchmark_payload)
 
 
+def test_artifact_paths_follow_configured_root(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("origami.api.app.ARTIFACT_ROOT", tmp_path)
+
+    assert _artifact_path(Path("artifacts/reports/scenario_report.json")) == (
+        tmp_path / "reports/scenario_report.json"
+    )
+    assert _artifact_path(Path("reports/custom.json")) == tmp_path / "reports/custom.json"
+
+
 def test_dashboard_multistep_config_endpoint_lists_yaml() -> None:
     payload = multistep_scenario_configs()
     expected_count = len(list(Path("configs/multistep_scenarios").glob("*.yaml")))
@@ -160,7 +170,9 @@ def test_metrics_endpoint_exposes_prometheus_payload() -> None:
     assert 'origami_benchmark_steps{scope="default"} 20.0' in body
 
 
-def test_dashboard_run_actions_write_reports() -> None:
+def test_dashboard_run_actions_write_reports(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("origami.api.app.CUSTOM_SCENARIO_DIR", tmp_path / "custom-scenarios")
+
     scenario_payload = scenario_run()
     single_payload = scenario_run_one("normal_delivery")
     multistep_payload = multistep_scenario_run()
@@ -185,6 +197,20 @@ def test_dashboard_run_actions_write_reports() -> None:
     assert "history_record" in multistep_payload
     assert "history_record" in single_multistep_payload
     assert "history_record" in benchmark_payload
+    assert scenario_payload["history_record"]["id"] == scenario_payload["run_id"]
+    assert single_payload["history_record"]["id"] == single_payload["run_id"]
+    assert multistep_payload["history_record"]["id"] == multistep_payload["run_id"]
+    assert single_multistep_payload["history_record"]["id"] == single_multistep_payload["run_id"]
+    assert benchmark_payload["history_record"]["id"] == benchmark_payload["run_id"]
+    for payload in (
+        scenario_payload,
+        single_payload,
+        multistep_payload,
+        single_multistep_payload,
+        benchmark_payload,
+    ):
+        assert Path(payload["history_record"]["artifact_dir"]).exists()
+        assert Path(payload["history_record"]["artifact_path"]).exists()
 
 
 def test_dashboard_history_endpoint_returns_recent_runs() -> None:
@@ -205,21 +231,28 @@ def test_dashboard_history_endpoint_returns_recent_runs() -> None:
     assert detail_payload["available"] is True
     assert detail_payload["record"]["id"] == history_payload["records"][0]["id"]
     assert detail_payload["data"]["quality_gate_passed"] is True
+    assert detail_payload["data"]["run_id"] == history_payload["records"][0]["id"]
+    assert {"json_report", "event_log", "audit_log"} <= set(
+        detail_payload["record"].get("artifacts", {})
+    )
 
 
-def test_dashboard_scenario_config_endpoint_lists_yaml() -> None:
+def test_dashboard_scenario_config_endpoint_lists_yaml(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("origami.api.app.CUSTOM_SCENARIO_DIR", tmp_path / "custom-scenarios")
+
     payload = scenario_configs()
     expected_scenario_count = len(list(Path("configs/scenarios").glob("*.yaml")))
 
-    assert {"available", "path", "count", "scenarios"} <= set(payload)
+    assert {"available", "path", "overlay_path", "count", "scenarios"} <= set(payload)
     assert payload["available"] is True
     assert payload["count"] == expected_scenario_count
     assert "normal_delivery" in {scenario["id"] for scenario in payload["scenarios"]}
+    assert all(scenario["source"] == "built_in" for scenario in payload["scenarios"])
 
 
-def test_dashboard_scenario_manager_endpoints_update_and_delete() -> None:
-    scenario_path = Path("configs/scenarios/dashboard_manager_tmp.yaml")
-    scenario_path.unlink(missing_ok=True)
+def test_dashboard_scenario_manager_endpoints_update_and_delete(monkeypatch, tmp_path: Path) -> None:
+    custom_dir = tmp_path / "custom-scenarios"
+    monkeypatch.setattr("origami.api.app.CUSTOM_SCENARIO_DIR", custom_dir)
 
     created = scenario_create(
         {
@@ -244,7 +277,11 @@ def test_dashboard_scenario_manager_endpoints_update_and_delete() -> None:
     )
     deleted = scenario_delete(created["scenario"]["id"])
 
+    assert Path(created["path"]).parent == custom_dir
     assert detail["scenario"]["id"] == "dashboard_manager_tmp"
+    assert detail["source"] == "custom"
+    assert detail["delete_allowed"] is True
     assert updated["updated"] is True
     assert updated["scenario"]["name"] == "Dashboard Manager Edited"
     assert deleted["deleted"] is True
+    assert not (custom_dir / "dashboard_manager_tmp.yaml").exists()

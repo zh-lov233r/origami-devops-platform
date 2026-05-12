@@ -27,6 +27,7 @@ RUN python -m pip install --no-cache-dir "uv==${UV_VERSION}" \
     && python -m pip uninstall -y uv \
     && rm -rf /tmp/requirements.txt /tmp/uv-cache
 
+COPY --chown=origami:origami configs ./configs
 COPY --chown=origami:origami src ./src
 
 USER origami

@@ -6,6 +6,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .uv-cache/
+.locks/
 .venv/
 .env
 .env.*
@@ -15,8 +16,12 @@ artifacts/**/*.json
 artifacts/**/*.jsonl
 artifacts/**/*.md
 artifacts/**/*.xml
+artifacts/**/*.yaml
+artifacts/**/*.yml
 artifacts/**/*.onnx
 artifacts/**/*.pt
 artifacts/**/*.pth
 artifacts/**/*.png
 artifacts/**/*.pdf
+artifacts/.locks/
+artifacts/**/.locks/

@@ -113,6 +113,7 @@ Work items:
 - Add a file lock or task queue to prevent concurrent runs from writing the same report, audit, or event files.
 - Upgrade audit/history from a latest-file view into a stable index. SQLite or append-only JSONL is acceptable for v0.1.
 - Add an artifact retention policy, such as keeping the last 30 days or the last 500 runs.
+- Write Dashboard custom scenarios to a persistent artifact/config directory while keeping image-bundled `configs/scenarios` read-only.
 - Add structured error responses and input schemas to reduce invalid runs caused by loose `dict[str, Any]` payloads.
 
 Acceptance criteria:
@@ -205,19 +206,21 @@ Acceptance criteria:
 
 ### Reliability
 
-- [ ] Every run has a unique run id.
-- [ ] Concurrent runs do not overwrite artifacts.
-- [ ] Historical runs can trace input, output, events, and audit.
-- [ ] Artifact retention policy is enabled.
+- [x] Every run has a unique run id.
+- [x] Concurrent runs do not overwrite artifacts.
+- [x] Historical runs can trace input, output, events, and audit.
+- [x] Artifact retention policy is enabled.
+- [x] Dashboard custom scenarios persist in a writable config directory without modifying bundled scenarios.
 - [ ] Rollback flow is verified.
 
 ### Quality
 
-- [ ] `make quality` passes.
-- [ ] Scenario suite passes.
-- [ ] Multi-step scenario suite passes.
-- [ ] Benchmark quality gate passes.
-- [ ] Audit verification passes.
+- [x] `make quality` passes.
+- [x] Scenario suite passes.
+- [x] Multi-step scenario suite passes.
+- [x] Benchmark quality gate passes.
+- [x] Audit verification passes.
+- [x] Local production-compose smoke check passes: API healthy, custom scenario create and run.
 - [ ] Staging smoke check passes.
 
 ### Operations

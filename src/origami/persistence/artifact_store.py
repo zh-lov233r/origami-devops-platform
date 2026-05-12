@@ -5,9 +5,22 @@ English: Artifact persistence layer for writing JSON, JSONL, and Markdown report
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
+import os
+import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - production containers and CI run on Unix-like hosts.
+    fcntl = None  # type: ignore[assignment]
+
+
+_THREAD_LOCKS: dict[str, threading.Lock] = {}
+_THREAD_LOCKS_GUARD = threading.Lock()
 
 
 class ArtifactStore:
@@ -20,14 +33,16 @@ class ArtifactStore:
         """Write a JSON artifact and return its absolute path."""
         path = self._resolve(relative_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True))
+        with self.lock(relative_path):
+            self._atomic_write_text(path, json.dumps(payload, indent=2, sort_keys=True))
         return path
 
     def write_text(self, relative_path: Path | str, content: str) -> Path:
         """Write a text artifact and return its absolute path."""
         path = self._resolve(relative_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
+        with self.lock(relative_path):
+            self._atomic_write_text(path, content)
         return path
 
     def write_jsonl(self, relative_path: Path | str, records: list[dict[str, Any]]) -> Path:
@@ -35,7 +50,8 @@ class ArtifactStore:
         path = self._resolve(relative_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         lines = [json.dumps(record, sort_keys=True, default=str) for record in records]
-        path.write_text("\n".join(lines) + ("\n" if lines else ""))
+        with self.lock(relative_path):
+            self._atomic_write_text(path, "\n".join(lines) + ("\n" if lines else ""))
         return path
 
     def append_jsonl(self, relative_path: Path | str, records: list[dict[str, Any]]) -> Path:
@@ -44,12 +60,55 @@ class ArtifactStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         lines = [json.dumps(record, sort_keys=True, default=str) for record in records]
         if lines:
-            with path.open("a") as file:
-                file.write("\n".join(lines) + "\n")
+            with self.lock(relative_path):
+                with path.open("a") as file:
+                    file.write("\n".join(lines) + "\n")
         return path
+
+    @contextlib.contextmanager
+    def lock(self, relative_path: Path | str) -> Iterator[None]:
+        """Acquire an advisory lock for writes that may be triggered concurrently."""
+        resolved_path = self._resolve(relative_path)
+        lock_root = resolved_path.parent if Path(relative_path).is_absolute() else self.root
+        lock_dir = lock_root / ".locks"
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        lock_name = _lock_name(resolved_path)
+        lock_path = lock_dir / f"{lock_name}.lock"
+        thread_lock = _thread_lock(lock_name)
+        thread_lock.acquire()
+        try:
+            with lock_path.open("w") as lock_file:
+                if fcntl is not None:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    if fcntl is not None:
+                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        finally:
+            thread_lock.release()
 
     def _resolve(self, relative_path: Path | str) -> Path:
         path = Path(relative_path)
         if path.is_absolute():
             return path
         return self.root / path
+
+    @staticmethod
+    def _atomic_write_text(path: Path, content: str) -> None:
+        temp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        temp_path.write_text(content)
+        os.replace(temp_path, path)
+
+
+def _lock_name(path: Path) -> str:
+    return hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:32]
+
+
+def _thread_lock(lock_name: str) -> threading.Lock:
+    with _THREAD_LOCKS_GUARD:
+        lock = _THREAD_LOCKS.get(lock_name)
+        if lock is None:
+            lock = threading.Lock()
+            _THREAD_LOCKS[lock_name] = lock
+        return lock

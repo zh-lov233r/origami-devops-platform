@@ -44,12 +44,16 @@ def test_settings_parse_internal_access_boundary_env() -> None:
             "ORIGAMI_ALLOWED_ORIGINS": "https://origami.internal, http://localhost:8000",
             "ORIGAMI_TRUSTED_HOSTS": "origami.internal,localhost",
             "ORIGAMI_ACTOR_HEADER": "X-Internal-User",
+            "ORIGAMI_RUN_RETENTION_LIMIT": "250",
+            "ORIGAMI_SCENARIO_CONFIG_DIR": "/var/lib/origami/custom-scenarios",
         }
     )
 
     assert settings.allowed_origins == ("https://origami.internal", "http://localhost:8000")
     assert settings.trusted_hosts == ("origami.internal", "localhost")
     assert settings.actor_header == "X-Internal-User"
+    assert settings.run_retention_limit == 250
+    assert str(settings.scenario_config_dir) == "/var/lib/origami/custom-scenarios"
 
 
 def test_protected_routes_require_token_when_auth_enabled(monkeypatch) -> None:
@@ -99,7 +103,10 @@ def test_health_runtime_config_and_metrics_stay_public_by_default(monkeypatch) -
     assert runtime_auth is None
     assert metrics is None
     assert config["auth_required"] is True
+    assert config["artifact_root"] == "artifacts"
+    assert config["scenario_config_dir"] == "artifacts/configs/scenarios"
     assert config["grafana_url"].endswith("/d/origami-overview?orgId=1")
+    assert config["run_retention_limit"] == 500
 
 
 def test_metrics_can_require_token(monkeypatch) -> None:

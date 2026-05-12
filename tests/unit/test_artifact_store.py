@@ -24,3 +24,23 @@ def test_artifact_store_writes_json_jsonl_and_text(tmp_path: Path) -> None:
         '{"step": 2}',
     ]
     assert text_path.read_text() == "# Example\n"
+
+
+def test_artifact_store_locks_absolute_paths_next_to_target(tmp_path: Path) -> None:
+    store = ArtifactStore(".")
+    output_path = tmp_path / "absolute.json"
+
+    store.write_json(output_path, {"ok": True})
+
+    assert json.loads(output_path.read_text()) == {"ok": True}
+    assert (tmp_path / ".locks").exists()
+
+
+def test_artifact_store_locks_relative_paths_under_root(tmp_path: Path) -> None:
+    store = ArtifactStore(tmp_path / "artifacts")
+
+    path = store.write_json("reports/example.json", {"ok": True})
+
+    assert path == tmp_path / "artifacts/reports/example.json"
+    assert not (tmp_path / "artifacts/artifacts").exists()
+    assert (tmp_path / "artifacts/.locks").exists()

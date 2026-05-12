@@ -6,6 +6,8 @@ English: Run history persistence layer recording scenario and benchmark runs tri
 from __future__ import annotations
 
 import json
+import re
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -15,28 +17,48 @@ from origami.persistence.artifact_store import ArtifactStore
 
 
 DEFAULT_HISTORY_INDEX_PATH = Path("history/runs.jsonl")
+DEFAULT_RUN_RETENTION_LIMIT = 500
 
 
 class RunHistoryStore:
     """Small append-only history index with full report snapshots."""
 
-    def __init__(self, root: Path | str = "artifacts") -> None:
+    def __init__(
+        self,
+        root: Path | str = "artifacts",
+        retention_limit: int | None = DEFAULT_RUN_RETENTION_LIMIT,
+    ) -> None:
         self.root = Path(root)
         self.store = ArtifactStore(self.root)
+        self.retention_limit = retention_limit
 
-    def record(self, run_type: str, report: dict[str, Any]) -> dict[str, Any]:
+    def record(
+        self,
+        run_type: str,
+        report: dict[str, Any],
+        run_id: str | None = None,
+    ) -> dict[str, Any]:
         """Persist a full report snapshot and append a compact history record."""
-        record_id = _record_id(run_type, report)
-        snapshot_path = Path("history") / run_type / f"{record_id}.json"
-        self.store.write_json(snapshot_path, report)
+        record_id = safe_run_id(run_id or str(report.get("run_id") or "") or _record_id(run_type, report))
+        report["run_id"] = record_id
+        run_dir = Path("runs") / record_id
+        snapshot_path = run_dir / "report.json"
 
         record = _summarize_run(
             run_type=run_type,
             record_id=record_id,
             report=report,
             artifact_path=self.root / snapshot_path,
+            artifact_dir=self.root / run_dir,
         )
-        self.store.append_jsonl(DEFAULT_HISTORY_INDEX_PATH, [record])
+        report["history_record"] = record
+        self.store.write_json(snapshot_path, report)
+        with self.store.lock(DEFAULT_HISTORY_INDEX_PATH):
+            path = self.root / DEFAULT_HISTORY_INDEX_PATH
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a") as file:
+                file.write(json.dumps(record, sort_keys=True, default=str) + "\n")
+            self._apply_retention_locked()
         return record
 
     def list(self, limit: int = 50) -> dict[str, Any]:
@@ -117,16 +139,47 @@ class RunHistoryStore:
             "path": str(artifact_path),
         }
 
+    def _apply_retention_locked(self) -> None:
+        if self.retention_limit is None or self.retention_limit <= 0:
+            return
 
-def _record_id(run_type: str, report: dict[str, Any]) -> str:
-    generated_at = str(report.get("generated_at") or datetime.now(UTC).isoformat())
+        records = _read_history_records(self.root / DEFAULT_HISTORY_INDEX_PATH)
+        if len(records) <= self.retention_limit:
+            return
+
+        keep_records = records[-self.retention_limit :]
+        prune_records = records[: -self.retention_limit]
+        for record in prune_records:
+            _remove_run_artifacts(self.root, record)
+
+        path = self.root / DEFAULT_HISTORY_INDEX_PATH
+        lines = [json.dumps(record, sort_keys=True, default=str) for record in keep_records]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines) + ("\n" if lines else ""))
+
+
+def new_run_id(run_type: str, generated_at: str | None = None) -> str:
+    """Return a unique, filesystem-safe run id with a readable type prefix."""
+    timestamp = generated_at or datetime.now(UTC).isoformat()
     safe_timestamp = (
-        generated_at.replace("+00:00", "Z")
+        timestamp.replace("+00:00", "Z")
         .replace(":", "")
         .replace(".", "")
         .replace("-", "")
     )
-    return f"{run_type}-{safe_timestamp}-{uuid4().hex[:8]}"
+    return safe_run_id(f"{run_type}-{safe_timestamp}-{uuid4().hex[:8]}")
+
+
+def safe_run_id(raw_id: str) -> str:
+    """Normalize arbitrary run ids into a path-safe token."""
+    cleaned = re.sub(r"[^a-zA-Z0-9_.-]+", "-", raw_id.strip())
+    cleaned = re.sub(r"-+", "-", cleaned).strip(".-")
+    return cleaned or new_run_id("run")
+
+
+def _record_id(run_type: str, report: dict[str, Any]) -> str:
+    generated_at = str(report.get("generated_at") or datetime.now(UTC).isoformat())
+    return new_run_id(run_type, generated_at)
 
 
 def _summarize_run(
@@ -134,17 +187,21 @@ def _summarize_run(
     record_id: str,
     report: dict[str, Any],
     artifact_path: Path,
+    artifact_dir: Path,
 ) -> dict[str, Any]:
     module_latency = _module_latency(report)
     max_p95_ms = max((float(metrics.get("p95", 0.0)) for metrics in module_latency.values()), default=0.0)
 
     record: dict[str, Any] = {
         "id": record_id,
+        "run_id": record_id,
         "type": run_type,
         "generated_at": report.get("generated_at"),
         "recorded_at": datetime.now(UTC).isoformat(),
         "quality_gate_passed": bool(report.get("quality_gate_passed")),
+        "artifact_dir": str(artifact_dir),
         "artifact_path": str(artifact_path),
+        "artifacts": report.get("artifacts", {}),
         "max_module_p95_ms": round(max_p95_ms, 4),
     }
 
@@ -189,3 +246,35 @@ def _benchmark_summary(report: dict[str, Any]) -> dict[str, Any]:
         "audit_valid": bool(report.get("audit_valid")),
         "max_module_p95_threshold_ms": max_threshold,
     }
+
+
+def _read_history_records(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+
+    records: list[dict[str, Any]] = []
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            records.append(parsed)
+    return records
+
+
+def _remove_run_artifacts(root: Path, record: dict[str, Any]) -> None:
+    artifact_dir = record.get("artifact_dir")
+    if not artifact_dir:
+        return
+
+    path = Path(str(artifact_dir))
+    try:
+        relative = path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return
+    if not relative.parts or relative.parts[0] != "runs":
+        return
+    shutil.rmtree(path, ignore_errors=True)

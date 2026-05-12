@@ -13,6 +13,7 @@ from origami.evaluation.scenario_builder import (
     get_scenario,
     list_scenarios,
     save_scenario,
+    scenario_file_paths,
     update_scenario,
 )
 
@@ -75,6 +76,64 @@ def test_scenario_builder_requires_overwrite_for_existing_yaml(tmp_path: Path) -
     overwritten = save_scenario({**payload, "overwrite": True}, scenario_dir=tmp_path)
 
     assert overwritten["saved"] is True
+
+
+def test_scenario_builder_overlays_custom_scenarios(tmp_path: Path) -> None:
+    built_in_dir = tmp_path / "built-in"
+    custom_dir = tmp_path / "custom"
+    save_scenario(
+        {
+            "id": "same_case",
+            "name": "Built In Same Case",
+            "observation": {"position": [0, 0], "target": [1, 1]},
+            "expected": {"final_move": "east"},
+        },
+        scenario_dir=built_in_dir,
+    )
+    save_scenario(
+        {
+            "id": "built_in_only",
+            "name": "Built In Only",
+            "observation": {"position": [0, 0], "target": [1, 1]},
+            "expected": {"final_move": "east"},
+        },
+        scenario_dir=built_in_dir,
+    )
+    save_scenario(
+        {
+            "id": "same_case",
+            "name": "Custom Same Case",
+            "observation": {"position": [0, 0], "target": [2, 2]},
+            "expected": {"final_move": "hold", "seom_passed": False},
+        },
+        scenario_dir=custom_dir,
+    )
+    save_scenario(
+        {
+            "id": "custom_only",
+            "name": "Custom Only",
+            "observation": {"position": [0, 0], "target": [1, 1]},
+            "expected": {"final_move": "east"},
+        },
+        scenario_dir=custom_dir,
+    )
+
+    listed = list_scenarios(built_in_dir, overlay_scenario_dir=custom_dir)
+    scenarios = {scenario["id"]: scenario for scenario in listed["scenarios"]}
+    paths = scenario_file_paths(built_in_dir, overlay_scenario_dir=custom_dir)
+    detail = get_scenario("same_case", built_in_dir, overlay_scenario_dir=custom_dir)
+
+    assert listed["count"] == 3
+    assert listed["overlay_path"] == str(custom_dir)
+    assert scenarios["same_case"]["name"] == "Custom Same Case"
+    assert scenarios["same_case"]["source"] == "custom"
+    assert scenarios["same_case"]["delete_allowed"] is True
+    assert scenarios["built_in_only"]["source"] == "built_in"
+    assert scenarios["built_in_only"]["delete_allowed"] is False
+    assert custom_dir / "same_case.yaml" in paths
+    assert built_in_dir / "same_case.yaml" not in paths
+    assert detail["scenario"]["name"] == "Custom Same Case"
+    assert detail["source"] == "custom"
 
 
 def test_scenario_manager_updates_renames_and_deletes_yaml(tmp_path: Path) -> None:

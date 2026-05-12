@@ -53,13 +53,14 @@ Run the local DevOps quality gate with:
 make quality
 ```
 
-It runs lint, unit/smoke tests, the Carry & Go scenario suite, latency benchmark, and audit verification. The scenario and benchmark commands write JSON reports to `artifacts/reports/`.
+It runs lint, unit/smoke tests, the Carry & Go scenario suite, latency benchmark, and audit verification. The scenario and benchmark commands write latest JSON reports to `artifacts/reports/` and run-specific bundles to `artifacts/runs/<run_id>/`.
 
 For easier review, the scenario runner also writes:
 
 - `artifacts/reports/scenario_report.md`: compact Markdown table for humans
 - `artifacts/events/scenario_events.jsonl`: per-module observability events
 - `artifacts/audit/scenario_audit.jsonl`: persisted audit-chain records
+- `artifacts/runs/<run_id>/`: immutable report, event log, and audit log for one run
 
 ## Artifact Dashboard
 
@@ -70,7 +71,12 @@ make quality
 make dashboard
 ```
 
-Open `http://127.0.0.1:8000/dashboard`. The page can save custom scenario YAML, trigger a new scenario run, trigger a new benchmark run, open the Grafana observability dashboard in a new tab, or refresh the current artifact view. Runs triggered through the dashboard are appended to `artifacts/history/runs.jsonl`, with full snapshots under `artifacts/history/scenario/` and `artifacts/history/benchmark/`.
+Open `http://127.0.0.1:8000/dashboard`. The page can save custom scenario YAML, trigger a new scenario run, trigger a new benchmark run, open the Grafana observability dashboard in a new tab, or refresh the current artifact view. Runs triggered through the dashboard are appended to `artifacts/history/runs.jsonl`, with full snapshots and trace artifacts under `artifacts/runs/<run_id>/`.
+
+Custom scenarios are written to `ORIGAMI_SCENARIO_CONFIG_DIR`, defaulting to
+`artifacts/configs/scenarios`, so production images can keep `configs/scenarios`
+read-only. Scenario listing and execution merge built-in YAML with custom
+overrides, with the custom directory taking precedence.
 
 The dashboard reads:
 

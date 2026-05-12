@@ -22,17 +22,16 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from origami.benchmark.runner import (
-    DEFAULT_BENCHMARK_REPORT_PATH,
-    run_default_latency_benchmark,
     run_latency_benchmark,
 )
 from origami.core.pipeline import PIC2Pipeline
 from origami.core.settings import OrigamiSettings, load_settings
 from origami.evaluation.multistep_runner import (
+    DEFAULT_MULTISTEP_SCENARIO_DIR,
     DEFAULT_MULTISTEP_REPORT_PATH,
     list_multistep_scenarios,
-    run_default_multistep_suite,
     run_multistep_scenario_case,
+    run_multistep_suite,
 )
 from origami.evaluation.scenario_builder import (
     delete_scenario,
@@ -43,8 +42,9 @@ from origami.evaluation.scenario_builder import (
 )
 from origami.evaluation.scenario_runner import (
     DEFAULT_REPORT_PATH,
-    run_default_scenario_suite,
+    DEFAULT_SCENARIO_DIR,
     run_scenario_case,
+    run_scenario_suite,
 )
 from origami.observability.metrics import (
     PROMETHEUS_CONTENT_TYPE,
@@ -59,8 +59,9 @@ app = FastAPI(title="Origami Mini PIC 2.0 DevOps Platform")
 
 SETTINGS = load_settings()
 ARTIFACT_ROOT = SETTINGS.artifact_root
+CUSTOM_SCENARIO_DIR = SETTINGS.scenario_config_dir
 DASHBOARD_STATIC_DIR = Path(__file__).resolve().parents[1] / "dashboard" / "static"
-RUN_HISTORY = RunHistoryStore(ARTIFACT_ROOT)
+RUN_HISTORY = RunHistoryStore(ARTIFACT_ROOT, retention_limit=SETTINGS.run_retention_limit)
 LOGGER = logging.getLogger("origami.api")
 logging.basicConfig(level=getattr(logging, SETTINGS.log_level, logging.INFO))
 
@@ -143,8 +144,11 @@ def runtime_config() -> dict[str, Any]:
         "environment": settings.environment,
         "auth_required": settings.auth_required,
         "metrics_auth_required": settings.metrics_auth_required,
+        "artifact_root": str(settings.artifact_root),
+        "scenario_config_dir": str(settings.scenario_config_dir),
         "grafana_url": settings.grafana_url,
         "actor_header": settings.actor_header,
+        "run_retention_limit": settings.run_retention_limit,
     }
 
 
@@ -155,17 +159,17 @@ def dashboard() -> FileResponse:
 
 @app.get("/api/reports/scenario")
 def scenario_report() -> dict[str, Any]:
-    return _read_json_artifact(DEFAULT_REPORT_PATH)
+    return _read_json_artifact(_artifact_path(DEFAULT_REPORT_PATH))
 
 
 @app.get("/api/reports/multistep-scenario")
 def multistep_scenario_report() -> dict[str, Any]:
-    return _read_json_artifact(DEFAULT_MULTISTEP_REPORT_PATH)
+    return _read_json_artifact(_artifact_path(DEFAULT_MULTISTEP_REPORT_PATH))
 
 
 @app.get("/api/reports/benchmark")
 def benchmark_report() -> dict[str, Any]:
-    return _read_json_artifact(DEFAULT_BENCHMARK_REPORT_PATH)
+    return _read_json_artifact(ARTIFACT_ROOT / "reports" / "benchmark_report.json")
 
 
 @app.get("/api/events/scenario")
@@ -209,7 +213,7 @@ def run_history_detail(record_id: str) -> dict[str, Any]:
 
 @app.get("/api/scenarios")
 def scenario_configs() -> dict[str, Any]:
-    return list_scenarios()
+    return list_scenarios(DEFAULT_SCENARIO_DIR, overlay_scenario_dir=CUSTOM_SCENARIO_DIR)
 
 
 @app.get("/api/multistep-scenarios")
@@ -220,7 +224,7 @@ def multistep_scenario_configs() -> dict[str, Any]:
 @app.get("/api/scenarios/{scenario_id}")
 def scenario_detail(scenario_id: str) -> dict[str, Any]:
     try:
-        return get_scenario(scenario_id)
+        return get_scenario(scenario_id, overlay_scenario_dir=CUSTOM_SCENARIO_DIR)
     except ValueError as exc:
         raise _scenario_http_error(exc) from exc
 
@@ -228,7 +232,7 @@ def scenario_detail(scenario_id: str) -> dict[str, Any]:
 @app.post("/api/scenarios")
 def scenario_create(payload: dict[str, Any], request: Request = None) -> dict[str, Any]:
     try:
-        result = save_scenario(payload)
+        result = save_scenario(payload, scenario_dir=CUSTOM_SCENARIO_DIR)
         _log_operation(
             request,
             "scenario_create",
@@ -249,7 +253,12 @@ def scenario_update(
     request: Request = None,
 ) -> dict[str, Any]:
     try:
-        result = update_scenario(scenario_id, payload)
+        result = update_scenario(
+            scenario_id,
+            payload,
+            scenario_dir=CUSTOM_SCENARIO_DIR,
+            create_if_missing=True,
+        )
         _log_operation(
             request,
             "scenario_update",
@@ -275,7 +284,7 @@ def scenario_update(
 @app.delete("/api/scenarios/{scenario_id}")
 def scenario_delete(scenario_id: str, request: Request = None) -> dict[str, Any]:
     try:
-        result = delete_scenario(scenario_id)
+        result = delete_scenario(scenario_id, scenario_dir=CUSTOM_SCENARIO_DIR)
         _log_operation(
             request,
             "scenario_delete",
@@ -306,8 +315,13 @@ def smoke_run(request: Request = None) -> dict[str, object]:
 
 @app.post("/runs/scenario")
 def scenario_run(request: Request = None) -> dict[str, Any]:
-    report = run_default_scenario_suite()
-    report["history_record"] = RUN_HISTORY.record("scenario", report)
+    report = run_scenario_suite(
+        DEFAULT_SCENARIO_DIR,
+        ARTIFACT_ROOT / "reports" / "scenario_report.json",
+        artifact_root=ARTIFACT_ROOT,
+        overlay_scenario_dir=CUSTOM_SCENARIO_DIR,
+    )
+    report["history_record"] = RUN_HISTORY.record("scenario", report, run_id=str(report["run_id"]))
     record_scenario_report(report, scope="suite")
     _log_operation(
         request,
@@ -326,8 +340,12 @@ def scenario_run(request: Request = None) -> dict[str, Any]:
 @app.post("/runs/scenario/{scenario_id}")
 def scenario_run_one(scenario_id: str, request: Request = None) -> dict[str, Any]:
     try:
-        report = run_scenario_case(scenario_id)
-        report["history_record"] = RUN_HISTORY.record("scenario", report)
+        report = run_scenario_case(
+            scenario_id,
+            artifact_root=ARTIFACT_ROOT,
+            overlay_scenario_dir=CUSTOM_SCENARIO_DIR,
+        )
+        report["history_record"] = RUN_HISTORY.record("scenario", report, run_id=str(report["run_id"]))
         record_scenario_report(report, scope=report.get("scenario", {}).get("id", scenario_id))
         _log_operation(
             request,
@@ -351,8 +369,12 @@ def scenario_run_one(scenario_id: str, request: Request = None) -> dict[str, Any
 
 @app.post("/runs/multistep-scenario")
 def multistep_scenario_run(request: Request = None) -> dict[str, Any]:
-    report = run_default_multistep_suite()
-    report["history_record"] = RUN_HISTORY.record("scenario", report)
+    report = run_multistep_suite(
+        DEFAULT_MULTISTEP_SCENARIO_DIR,
+        ARTIFACT_ROOT / "reports" / "multistep_scenario_report.json",
+        artifact_root=ARTIFACT_ROOT,
+    )
+    report["history_record"] = RUN_HISTORY.record("scenario", report, run_id=str(report["run_id"]))
     record_scenario_report(report, scope="multistep-suite")
     _log_operation(
         request,
@@ -374,9 +396,9 @@ def multistep_scenario_run_one(
     request: Request = None,
 ) -> dict[str, Any]:
     try:
-        report = run_multistep_scenario_case(scenario_id)
+        report = run_multistep_scenario_case(scenario_id, artifact_root=ARTIFACT_ROOT)
         scope = report.get("scenario", {}).get("id", scenario_id)
-        report["history_record"] = RUN_HISTORY.record("scenario", report)
+        report["history_record"] = RUN_HISTORY.record("scenario", report, run_id=str(report["run_id"]))
         record_scenario_report(report, scope=f"multistep-{scope}")
         _log_operation(
             request,
@@ -400,8 +422,11 @@ def multistep_scenario_run_one(
 
 @app.post("/runs/benchmark")
 def benchmark_run(request: Request = None) -> dict[str, object]:
-    report = run_default_latency_benchmark()
-    report["history_record"] = RUN_HISTORY.record("benchmark", report)
+    report = run_latency_benchmark(
+        report_path=ARTIFACT_ROOT / "reports" / "benchmark_report.json",
+        artifact_root=ARTIFACT_ROOT,
+    )
+    report["history_record"] = RUN_HISTORY.record("benchmark", report, run_id=str(report["run_id"]))
     record_benchmark_report(report)
     _log_operation(
         request,
@@ -418,11 +443,14 @@ def benchmark_run(request: Request = None) -> dict[str, object]:
 
 @app.post("/benchmarks/latency")
 def latency_benchmark(request: Request = None) -> dict[str, object]:
-    report = run_latency_benchmark()
+    report = run_latency_benchmark(artifact_root=ARTIFACT_ROOT)
+    report["history_record"] = RUN_HISTORY.record("benchmark", report, run_id=str(report["run_id"]))
+    record_benchmark_report(report)
     _log_operation(
         request,
         "run_latency_benchmark",
         status_code=200,
+        run_id=report["history_record"].get("id"),
         metadata={
             "quality_gate_passed": report.get("quality_gate_passed"),
             "audit_valid": report.get("audit_valid"),
@@ -555,6 +583,14 @@ def _request_token(request: Request) -> str:
     if scheme.lower() == "bearer":
         return token.strip()
     return ""
+
+
+def _artifact_path(default_path: Path) -> Path:
+    if default_path.is_absolute():
+        return default_path
+    if default_path.parts and default_path.parts[0] == "artifacts":
+        return ARTIFACT_ROOT.joinpath(*default_path.parts[1:])
+    return ARTIFACT_ROOT / default_path
 
 
 def _read_json_artifact(path: Path) -> dict[str, Any]:

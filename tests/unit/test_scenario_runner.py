@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from shutil import copyfile
 
+from origami.evaluation.scenario_builder import save_scenario
 from origami.evaluation.scenario_runner import run_scenario_case, run_scenario_suite
 
 
@@ -32,6 +33,7 @@ def test_scenario_runner_executes_all_carry_go_cases(tmp_path: Path) -> None:
 
     report = run_scenario_suite(scenario_dir, report_path, artifact_root=tmp_path)
 
+    assert report["run_id"].startswith("scenario-")
     assert report["suite"] == "carry_go"
     assert report["total"] == 8
     assert report["passed"] == 8
@@ -49,6 +51,9 @@ def test_scenario_runner_executes_all_carry_go_cases(tmp_path: Path) -> None:
     assert "Safety Signals" in (tmp_path / "reports/scenario_report.md").read_text()
     assert (tmp_path / "events/scenario_events.jsonl").exists()
     assert (tmp_path / "audit/scenario_audit.jsonl").exists()
+    assert Path(report["artifacts"]["json_report"]).exists()
+    assert Path(report["artifacts"]["event_log"]).parent.name == report["run_id"]
+    assert json.loads(Path(report["artifacts"]["json_report"]).read_text())["run_id"] == report["run_id"]
 
     scenarios = {scenario["id"]: scenario for scenario in report["scenarios"]}
 
@@ -63,8 +68,14 @@ def test_scenario_runner_executes_one_case(tmp_path: Path) -> None:
     scenario_dir.mkdir()
     copyfile(Path("configs/scenarios") / "normal_delivery.yaml", scenario_dir / "normal_delivery.yaml")
 
-    report = run_scenario_case("normal_delivery", scenario_dir)
+    report = run_scenario_case(
+        "normal_delivery",
+        scenario_dir,
+        artifact_root=tmp_path,
+        run_id="targeted-normal-delivery",
+    )
 
+    assert report["run_id"] == "targeted-normal-delivery"
     assert report["total"] == 1
     assert report["passed"] == 1
     assert report["quality_gate_passed"] is True
@@ -72,6 +83,58 @@ def test_scenario_runner_executes_one_case(tmp_path: Path) -> None:
     assert report["scenario"]["actual"]["final_move"] == "east"
     assert report["scenario"]["violation_analysis"]["status"] == "none"
     assert "seom" in report["summary"]["module_latency_ms"]
+    assert (tmp_path / "runs/targeted-normal-delivery/scenario_report.json").exists()
+    assert "targeted-normal-delivery" in (
+        tmp_path / "runs/targeted-normal-delivery/scenario_events.jsonl"
+    ).read_text()
+
+
+def test_scenario_runner_uses_custom_overlay_cases(tmp_path: Path) -> None:
+    scenario_dir = tmp_path / "scenarios"
+    custom_dir = tmp_path / "custom-scenarios"
+    scenario_dir.mkdir()
+    copyfile(Path("configs/scenarios") / "normal_delivery.yaml", scenario_dir / "normal_delivery.yaml")
+    save_scenario(
+        {
+            "id": "normal_delivery",
+            "name": "Custom Normal Delivery",
+            "observation": {"position": [0, 0], "target": [2, 0]},
+            "expected": {"final_move": "east", "seom_passed": True},
+        },
+        scenario_dir=custom_dir,
+    )
+    save_scenario(
+        {
+            "id": "custom_only",
+            "name": "Custom Only",
+            "observation": {"position": [0, 0], "target": [1, 0]},
+            "expected": {"final_move": "east", "seom_passed": True},
+        },
+        scenario_dir=custom_dir,
+    )
+
+    report = run_scenario_suite(
+        scenario_dir,
+        artifact_root=tmp_path,
+        run_id="overlay-suite",
+        overlay_scenario_dir=custom_dir,
+    )
+    single_report = run_scenario_case(
+        "custom_only",
+        scenario_dir,
+        artifact_root=tmp_path,
+        run_id="overlay-single",
+        overlay_scenario_dir=custom_dir,
+    )
+    scenarios = {scenario["id"]: scenario for scenario in report["scenarios"]}
+
+    assert report["quality_gate_passed"] is True
+    assert report["total"] == 2
+    assert scenarios["normal_delivery"]["name"] == "Custom Normal Delivery"
+    assert Path(scenarios["normal_delivery"]["path"]).parent == custom_dir
+    assert scenarios["custom_only"]["passed"] is True
+    assert single_report["scenario"]["id"] == "custom_only"
+    assert Path(single_report["scenario"]["path"]).parent == custom_dir
 
 
 def test_unexpected_violation_fails_scenario(tmp_path: Path) -> None:

@@ -24,6 +24,7 @@ def test_multistep_runner_executes_low_battery_return_timeline(tmp_path: Path) -
 
     report = run_multistep_suite(scenario_dir, report_path, artifact_root=tmp_path)
 
+    assert report["run_id"].startswith("multistep-scenario-")
     assert report["suite"] == "carry_go_multistep"
     assert report["total"] == 1
     assert report["passed"] == 1
@@ -52,6 +53,8 @@ def test_multistep_runner_executes_low_battery_return_timeline(tmp_path: Path) -
     assert (tmp_path / "reports/multistep_scenario_report.md").exists()
     assert (tmp_path / "events/multistep_scenario_events.jsonl").exists()
     assert (tmp_path / "audit/multistep_scenario_audit.jsonl").exists()
+    assert Path(report["artifacts"]["json_report"]).exists()
+    assert Path(report["artifacts"]["event_log"]).parent.name == report["run_id"]
 
 
 def test_multistep_runner_executes_one_case(tmp_path: Path) -> None:
@@ -62,12 +65,19 @@ def test_multistep_runner_executes_one_case(tmp_path: Path) -> None:
         scenario_dir / "delivery_low_battery_return.yaml",
     )
 
-    report = run_multistep_scenario_case("delivery_low_battery_return", scenario_dir)
+    report = run_multistep_scenario_case(
+        "delivery_low_battery_return",
+        scenario_dir,
+        artifact_root=tmp_path,
+        run_id="targeted-low-battery",
+    )
 
+    assert report["run_id"] == "targeted-low-battery"
     assert report["total"] == 1
     assert report["scenario"]["id"] == "delivery_low_battery_return"
     assert report["scenario"]["passed"] is True
     assert report["scenario"]["final_actual"]["final_move"] == "return_to_dock"
+    assert (tmp_path / "runs/targeted-low-battery/multistep_scenario_report.json").exists()
 
 
 def test_multistep_runner_fails_unexpected_safety_signal(tmp_path: Path) -> None:

@@ -147,6 +147,7 @@ def main() -> None:
             report = run_multistep_scenario_case(
                 args.multistep_scenario_id,
                 Path(args.multistep_scenario_dir),
+                artifact_root=Path(args.artifact_root),
             )
         else:
             report = run_multistep_suite(
@@ -161,6 +162,7 @@ def main() -> None:
         report = run_latency_benchmark(
             steps=args.benchmark_steps,
             report_path=Path(args.benchmark_report_path),
+            artifact_root=Path(args.artifact_root),
             max_module_p95_ms=args.max_module_p95_ms,
         )
         print(json.dumps(report, indent=2, sort_keys=True))
