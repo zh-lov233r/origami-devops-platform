@@ -111,19 +111,25 @@ which defaults to `artifacts/configs/scenarios`. The built-in scenario files in
 `configs/scenarios` remain read-only inputs, and custom files overlay them at
 list and run time.
 
-## Continuous Integration
+## Release Gate
 
-GitHub Actions runs the project quality gates on every push and pull request:
+GitHub Actions uses `.github/workflows/quality.yml` as the authoritative
+`release-gate` workflow on pull requests, pushes to `main`, version tags, and
+manual dispatch. It runs the project quality gates:
 
 ```bash
 make lint
 python -m pytest --junitxml=artifacts/reports/pytest.xml
 make scenario
+make multistep-scenario
 make benchmark
 make audit-verify
 ```
 
-The workflow uploads `artifacts/reports`, `artifacts/events`, and `artifacts/audit` so failed runs keep the scenario report, benchmark report, pytest XML, event log, and audit log attached to the CI run.
+The workflow also exports locked runtime requirements for dependency scanning,
+builds the production image, generates an image SBOM, scans the image, records a
+release manifest, and runs a production-compose staging smoke check after pushes
+to `main`. See `docs/release_control.md` for the release and rollback path.
 
 ## Target Workflow
 

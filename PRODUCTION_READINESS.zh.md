@@ -131,9 +131,9 @@ v0.1 上线成功意味着平台可以作为内部开发者仿真验证服务稳
 - 整理 GitHub Actions，保留一条权威质量门。
 - 在 CI 中构建生产镜像。
 - 增加依赖漏洞扫描、镜像扫描和基础 SBOM 输出。
-- main 分支合并后部署到 staging。
-- tag 或 release 后手动批准部署到 internal production。
-- 发布时记录版本号、git SHA、镜像 digest、迁移说明和回滚命令。
+- main 分支合并后运行 staging smoke check。
+- tag 或 release 后通过 `internal-production` environment 手动批准。
+- 发布时记录版本号、git SHA、镜像 digest / image ID、迁移说明和回滚命令。
 
 验收标准：
 
@@ -221,7 +221,11 @@ v0.1 上线成功意味着平台可以作为内部开发者仿真验证服务稳
 - [x] benchmark quality gate 通过。
 - [x] audit verification 通过。
 - [x] 本地 production compose smoke check 通过：API healthy、自定义场景创建和运行。
-- [ ] staging smoke check 通过。
+- [x] CI release gate 已包含 staging smoke check。
+- [x] CI release gate 已包含生产镜像构建、依赖扫描、镜像扫描和 SBOM。
+- [x] tag release 已绑定 internal-production 手动审批 environment。
+- [x] release manifest 会记录版本、git SHA、镜像标识、迁移说明和回滚命令。
+- [ ] 真实 staging 环境 smoke check 通过。
 
 ### Operations
 

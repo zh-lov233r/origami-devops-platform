@@ -131,9 +131,9 @@ Work items:
 - Consolidate GitHub Actions into one authoritative quality gate.
 - Build the production image in CI.
 - Add dependency vulnerability scanning, image scanning, and basic SBOM output.
-- Deploy the main branch to staging after merge.
-- Require manual approval to deploy a tag or release to internal production.
-- Record version number, git SHA, image digest, migration notes, and rollback command for each release.
+- Run a staging smoke check after the main branch merges.
+- Require manual approval through the `internal-production` environment for tags or releases.
+- Record version number, git SHA, image digest / image ID, migration notes, and rollback command for each release.
 
 Acceptance criteria:
 
@@ -221,7 +221,11 @@ Acceptance criteria:
 - [x] Benchmark quality gate passes.
 - [x] Audit verification passes.
 - [x] Local production-compose smoke check passes: API healthy, custom scenario create and run.
-- [ ] Staging smoke check passes.
+- [x] CI release gate includes staging smoke check.
+- [x] CI release gate includes production image build, dependency scan, image scan, and SBOM.
+- [x] Tag releases are bound to the internal-production manual approval environment.
+- [x] Release manifest records version, git SHA, image identifier, migration notes, and rollback command.
+- [ ] Real staging environment smoke check passes.
 
 ### Operations
 

@@ -1,7 +1,7 @@
-# 中文：CI 质量门，运行 lint、测试、场景回归、benchmark 和 audit verification。
-# English: CI quality gate running lint, tests, scenario regression, benchmark, and audit verification.
+# 中文：权威 CI / release gate，运行质量门、扫描、生产镜像构建和发布审批。
+# English: Authoritative CI / release gate running quality checks, scans, production image build, and release approval.
 
-name: quality
+name: release-gate
 
 on:
   workflow_dispatch:
@@ -9,9 +9,13 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
 
 permissions:
   contents: read
+  packages: write
+  security-events: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,6 +26,7 @@ env:
   UV_CACHE_DIR: .uv-cache
   UV_PYTHON_DOWNLOADS: never
   UV_VERSION: "0.11.8"
+  IMAGE_NAME: ghcr.io/${{ github.repository }}/origami-api
 
 jobs:
   workflow-lint:
@@ -46,6 +51,7 @@ jobs:
           "$RUNNER_TEMP/actionlint"
 
   quality:
+    name: Quality Gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -72,16 +78,200 @@ jobs:
       - name: Run quality gate
         run: make quality PYTHON=.venv/bin/python
 
-      - name: Upload scenario and benchmark reports
+      - name: Run multi-step scenario gate
+        run: make multistep-scenario PYTHON=.venv/bin/python
+
+      - name: Upload quality artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quality-reports
           path: |
-            artifacts/reports/scenario_report.json
-            artifacts/reports/scenario_report.md
-            artifacts/reports/benchmark_report.json
-            artifacts/events/scenario_events.jsonl
-            artifacts/audit/scenario_audit.jsonl
+            artifacts/reports/**
+            artifacts/events/**
+            artifacts/audit/**
+            artifacts/runs/**
           if-no-files-found: warn
           retention-days: 14
+
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          cache-local-path: .uv-cache
+
+      - name: Export locked runtime requirements
+        run: |
+          mkdir -p artifacts/security
+          uv export --locked --no-dev --format requirements-txt --output-file artifacts/security/requirements.txt
+
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+
+      - name: Audit runtime dependencies
+        run: |
+          pip-audit \
+            --requirement artifacts/security/requirements.txt \
+            --format json \
+            --output artifacts/security/pip-audit.json
+
+      - name: Upload dependency scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan
+          path: artifacts/security/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  production-image:
+    name: Production Image, SBOM, and Image Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - quality
+      - dependency-scan
+    outputs:
+      image-ref: ${{ steps.image.outputs.image_ref }}
+      image-digest: ${{ steps.image.outputs.image_digest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build production image
+        run: |
+          mkdir -p artifacts/security artifacts/release
+          docker build --pull --tag "${IMAGE_NAME}:${GITHUB_SHA}" .
+          docker image inspect --format='{{.Id}}' "${IMAGE_NAME}:${GITHUB_SHA}" > artifacts/security/image-digest.txt
+
+      - name: Push production image for main and tags
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        run: |
+          docker push "${IMAGE_NAME}:${GITHUB_SHA}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            docker tag "${IMAGE_NAME}:${GITHUB_SHA}" "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+            docker push "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+          fi
+
+      - name: Capture image metadata
+        id: image
+        run: |
+          digest="$(cat artifacts/security/image-digest.txt)"
+          echo "image_ref=${IMAGE_NAME}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "image_digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate image SBOM
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/artifacts/security:/out" \
+            aquasec/trivy:0.58.2 \
+            image --format cyclonedx --output /out/image-sbom.cdx.json "${IMAGE_NAME}:${GITHUB_SHA}"
+
+      - name: Scan production image
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/artifacts/security:/out" \
+            aquasec/trivy:0.58.2 \
+            image --severity HIGH,CRITICAL --exit-code 1 \
+            --format sarif --output /out/trivy-image.sarif "${IMAGE_NAME}:${GITHUB_SHA}"
+
+      - name: Upload image scan SARIF
+        if: always() && github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: artifacts/security/trivy-image.sarif
+
+      - name: Write release manifest draft
+        run: |
+          scripts/write_release_manifest.sh \
+            "${GITHUB_REF_NAME}" \
+            "${GITHUB_SHA}" \
+            "${IMAGE_NAME}:${GITHUB_SHA}" \
+            "$(cat artifacts/security/image-digest.txt)" \
+            "No database migrations for v0.1 runtime artifacts." \
+            "Redeploy the previous approved image tag or SHA through docker compose prod."
+
+      - name: Upload image and release artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-security-release
+          path: |
+            artifacts/security/**
+            artifacts/release/**
+          if-no-files-found: warn
+          retention-days: 30
+
+  staging-smoke:
+    name: Staging Smoke Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - production-image
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build staging compose image
+        run: docker compose --env-file .env.production.example -f docker-compose.prod.yml build api
+
+      - name: Start staging compose API
+        run: docker compose --env-file .env.production.example -f docker-compose.prod.yml up -d api
+
+      - name: Run staging smoke check
+        env:
+          ORIGAMI_API_BASE_URL: http://127.0.0.1:8000
+          ORIGAMI_API_TOKEN: replace-with-internal-token
+        run: scripts/staging_smoke.sh
+
+      - name: Stop staging compose API
+        if: always()
+        run: docker compose --env-file .env.production.example -f docker-compose.prod.yml down
+
+  internal-production-approval:
+    name: Internal Production Approval
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - production-image
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: internal-production
+
+    steps:
+      - name: Record approved production candidate
+        run: |
+          echo "Approved production candidate:"
+          echo "Image: ${{ needs.production-image.outputs.image-ref }}"
+          echo "Digest: ${{ needs.production-image.outputs.image-digest }}"

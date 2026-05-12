@@ -15,9 +15,11 @@ __pycache__/
 artifacts/**/*.json
 artifacts/**/*.jsonl
 artifacts/**/*.md
+artifacts/**/*.txt
 artifacts/**/*.xml
 artifacts/**/*.yaml
 artifacts/**/*.yml
+artifacts/**/*.sarif
 artifacts/**/*.onnx
 artifacts/**/*.pt
 artifacts/**/*.pth
