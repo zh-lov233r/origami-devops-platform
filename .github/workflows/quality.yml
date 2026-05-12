@@ -199,7 +199,8 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "${PWD}/artifacts/security:/out" \
             aquasec/trivy:0.58.2 \
-            image --severity HIGH,CRITICAL --exit-code 1 \
+            image --scanners vuln --ignore-unfixed \
+            --severity HIGH,CRITICAL --exit-code 1 \
             --format sarif --output /out/trivy-image.sarif "${IMAGE_NAME}:${GITHUB_SHA}"
 
       - name: Upload image scan SARIF

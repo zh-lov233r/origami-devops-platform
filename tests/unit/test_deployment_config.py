@@ -17,7 +17,9 @@ def test_production_dockerfile_uses_locked_non_root_runtime() -> None:
 
     assert "ARG PYTHON_IMAGE=python:3.11.13-slim-bookworm" in dockerfile
     assert "ARG UV_VERSION=0.11.8" in dockerfile
+    assert "apt-get upgrade -y --no-install-recommends" in dockerfile
     assert "uv export --locked --no-dev --format requirements-txt" in dockerfile
+    assert "python -m pip uninstall -y uv setuptools wheel" in dockerfile
     assert "COPY --chown=origami:origami configs ./configs" in dockerfile
     assert "COPY --chown=origami:origami src ./src" in dockerfile
     assert "ENV ORIGAMI_ARTIFACT_ROOT=/var/lib/origami/artifacts" in dockerfile

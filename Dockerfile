@@ -15,6 +15,10 @@ ENV UV_CACHE_DIR=/tmp/uv-cache
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system origami \
     && useradd --system --gid origami --home-dir /home/origami --create-home origami \
     && mkdir -p /var/lib/origami/artifacts \
@@ -24,7 +28,7 @@ COPY pyproject.toml uv.lock ./
 RUN python -m pip install --no-cache-dir "uv==${UV_VERSION}" \
     && uv export --locked --no-dev --format requirements-txt --output-file /tmp/requirements.txt \
     && python -m pip install --no-cache-dir -r /tmp/requirements.txt \
-    && python -m pip uninstall -y uv \
+    && python -m pip uninstall -y uv setuptools wheel \
     && rm -rf /tmp/requirements.txt /tmp/uv-cache
 
 COPY --chown=origami:origami configs ./configs

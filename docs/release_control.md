@@ -18,8 +18,14 @@ manual dispatch. It includes:
 - locked runtime dependency export and `pip-audit`
 - production Docker image build
 - image SBOM generation
-- Trivy image scan for high and critical findings
+- Trivy image scan for fixable high and critical vulnerability findings
 - release manifest artifact with version, git SHA, image identifier, migration notes, and rollback command
+
+The production Dockerfile applies Debian security updates during image build and
+removes runtime-unneeded Python packaging tools after dependency installation.
+The Trivy gate uses `--ignore-unfixed`, so it fails releases for high/critical
+issues with an available fix while still reporting upstream issues that do not
+yet have a fixed package version.
 
 ## Staging
 

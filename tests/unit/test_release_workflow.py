@@ -52,6 +52,7 @@ def test_release_gate_runs_quality_scans_image_build_and_smoke() -> None:
     assert "pip-audit" in workflow_text
     assert "docker build --pull" in workflow_text
     assert "aquasec/trivy:0.58.2" in workflow_text
+    assert "--scanners vuln --ignore-unfixed" in workflow_text
     assert "image-sbom.cdx.json" in workflow_text
     assert "trivy-image.sarif" in workflow_text
     assert "scripts/staging_smoke.sh" in workflow_text

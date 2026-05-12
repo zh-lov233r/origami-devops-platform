@@ -127,7 +127,8 @@ make audit-verify
 ```
 
 The workflow also exports locked runtime requirements for dependency scanning,
-builds the production image, generates an image SBOM, scans the image, records a
+builds the production image with Debian security updates, generates an image
+SBOM, scans the image for fixable high/critical vulnerabilities, records a
 release manifest, and runs a production-compose staging smoke check after pushes
 to `main`. See `docs/release_control.md` for the release and rollback path.
 
