@@ -193,6 +193,9 @@ v0.1 上线成功意味着平台可以作为内部开发者仿真验证服务稳
 - [x] API/Dashboard 写操作已鉴权。
 - [x] Report、audit 和 history 读取策略已定义。
 - [x] Grafana 生产环境不使用 anonymous admin。
+- [x] Google Workspace SSO 反向代理模板已提供：oauth2-proxy + Nginx。
+- [x] API 可要求可信代理注入用户身份 header。
+- [ ] Google OAuth client、公司域名和可选 Google Group 策略已在真实环境配置。
 - [ ] 生产环境只允许内部网络或 VPN 访问。
 - [x] 关键操作记录 actor 和 request id。
 

@@ -26,6 +26,7 @@ class OrigamiSettings:
     api_token: str
     auth_required: bool
     metrics_auth_required: bool
+    trusted_proxy_auth_required: bool
     run_retention_limit: int
 
 
@@ -63,6 +64,10 @@ def load_settings(environ: Mapping[str, str] | None = None) -> OrigamiSettings:
         ),
         metrics_auth_required=_bool_env(
             env.get("ORIGAMI_METRICS_AUTH_REQUIRED"),
+            default=False,
+        ),
+        trusted_proxy_auth_required=_bool_env(
+            env.get("ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED"),
             default=False,
         ),
         run_retention_limit=_int_env(

@@ -1,0 +1,104 @@
+# 中文：Google Workspace SSO 反向代理 overlay，用于在生产 compose 前增加 oauth2-proxy 和 Nginx。
+# English: Google Workspace SSO reverse-proxy overlay adding oauth2-proxy and Nginx in front of production compose.
+
+services:
+  api:
+    environment:
+      ORIGAMI_AUTH_REQUIRED: "true"
+      ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED: ${ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED:-true}
+      ORIGAMI_ACTOR_HEADER: X-Origami-Actor
+    expose:
+      - "8000"
+
+  grafana:
+    environment:
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.2
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_PROVIDER: google
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_PROXY_CLIENT_ID:?Set OAUTH2_PROXY_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?Set OAUTH2_PROXY_CLIENT_SECRET}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?Set OAUTH2_PROXY_COOKIE_SECRET}
+      OAUTH2_PROXY_REDIRECT_URL: ${OAUTH2_PROXY_REDIRECT_URL:?Set OAUTH2_PROXY_REDIRECT_URL}
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${GOOGLE_WORKSPACE_DOMAIN:?Set GOOGLE_WORKSPACE_DOMAIN}
+      OAUTH2_PROXY_COOKIE_DOMAINS: ${OAUTH2_PROXY_COOKIE_DOMAINS:?Set OAUTH2_PROXY_COOKIE_DOMAINS}
+      OAUTH2_PROXY_WHITELIST_DOMAINS: ${OAUTH2_PROXY_WHITELIST_DOMAINS:?Set OAUTH2_PROXY_WHITELIST_DOMAINS}
+      OAUTH2_PROXY_SCOPE: openid email profile
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_PASS_USER_HEADERS: "true"
+      OAUTH2_PROXY_PASS_AUTHORIZATION_HEADER: "false"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_COOKIE_REFRESH: 1h
+      OAUTH2_PROXY_COOKIE_EXPIRE: 8h
+      OAUTH2_PROXY_UPSTREAMS: static://202
+    expose:
+      - "4180"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  sso-proxy:
+    image: nginx:1.29.8-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      oauth2-proxy:
+        condition: service_started
+    environment:
+      ORIGAMI_API_TOKEN: ${ORIGAMI_API_TOKEN:?Set ORIGAMI_API_TOKEN for the trusted proxy}
+    command:
+      - /bin/sh
+      - /usr/local/bin/render_nginx_sso_config.sh
+    ports:
+      - "${ORIGAMI_SSO_BIND:-127.0.0.1:8080}:8080"
+    volumes:
+      - ./configs/auth/nginx/origami-sso.conf.template:/etc/nginx/templates/origami-sso.conf.template:ro
+      - ./scripts/render_nginx_sso_config.sh:/usr/local/bin/render_nginx_sso_config.sh:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://127.0.0.1:8080/api/health || exit 1",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+        reservations:
+          memory: 64M

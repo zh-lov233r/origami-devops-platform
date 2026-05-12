@@ -1,0 +1,87 @@
+# 中文：Nginx SSO 前置代理配置，通过 oauth2-proxy 验证 Google Workspace 登录。
+# English: Nginx SSO edge proxy config authenticating Google Workspace logins through oauth2-proxy.
+
+server {
+    listen 8080;
+    server_name _;
+
+    client_max_body_size 4m;
+
+    location /oauth2/ {
+        proxy_pass http://oauth2-proxy:4180;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Scheme $scheme;
+        proxy_set_header X-Auth-Request-Redirect $scheme://$host$request_uri;
+    }
+
+    location = /oauth2/auth {
+        internal;
+        proxy_pass http://oauth2-proxy:4180;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Scheme $scheme;
+        proxy_set_header X-Forwarded-Uri $request_uri;
+        proxy_set_header Content-Length "";
+        proxy_pass_request_body off;
+    }
+
+    location @oauth2_signin {
+        return 302 /oauth2/start?rd=$scheme://$host$request_uri;
+    }
+
+    location = /api/health {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://api:8000/api/health;
+    }
+
+    location = /health {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://api:8000/health;
+    }
+
+    location /grafana/ {
+        auth_request /oauth2/auth;
+        error_page 401 = @oauth2_signin;
+
+        auth_request_set $email $upstream_http_x_auth_request_email;
+        auth_request_set $user $upstream_http_x_auth_request_user;
+
+        proxy_set_header X-Origami-Actor $email;
+        proxy_set_header X-Origami-Token "__ORIGAMI_API_TOKEN__";
+        proxy_set_header X-Forwarded-User $user;
+        proxy_set_header X-Forwarded-Email $email;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host $host;
+
+        proxy_pass http://grafana:3000;
+    }
+
+    location / {
+        auth_request /oauth2/auth;
+        error_page 401 = @oauth2_signin;
+
+        auth_request_set $email $upstream_http_x_auth_request_email;
+        auth_request_set $user $upstream_http_x_auth_request_user;
+
+        proxy_set_header X-Origami-Actor $email;
+        proxy_set_header X-Origami-Token "__ORIGAMI_API_TOKEN__";
+        proxy_set_header X-Forwarded-User $user;
+        proxy_set_header X-Forwarded-Email $email;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Host $host;
+
+        proxy_set_header Authorization "";
+        proxy_set_header X-Auth-Request-Email "";
+        proxy_set_header X-Auth-Request-User "";
+
+        proxy_pass http://api:8000;
+    }
+}

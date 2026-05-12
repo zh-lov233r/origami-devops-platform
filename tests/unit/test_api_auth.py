@@ -11,6 +11,7 @@ from starlette.requests import Request
 from origami.api.app import (
     _auth_error_response,
     _log_operation,
+    _path_requires_proxy_identity,
     _request_actor,
     _request_id,
     _source_ip,
@@ -46,6 +47,7 @@ def test_settings_parse_internal_access_boundary_env() -> None:
             "ORIGAMI_ACTOR_HEADER": "X-Internal-User",
             "ORIGAMI_RUN_RETENTION_LIMIT": "250",
             "ORIGAMI_SCENARIO_CONFIG_DIR": "/var/lib/origami/custom-scenarios",
+            "ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED": "true",
         }
     )
 
@@ -54,6 +56,7 @@ def test_settings_parse_internal_access_boundary_env() -> None:
     assert settings.actor_header == "X-Internal-User"
     assert settings.run_retention_limit == 250
     assert str(settings.scenario_config_dir) == "/var/lib/origami/custom-scenarios"
+    assert settings.trusted_proxy_auth_required is True
 
 
 def test_protected_routes_require_token_when_auth_enabled(monkeypatch) -> None:
@@ -103,6 +106,7 @@ def test_health_runtime_config_and_metrics_stay_public_by_default(monkeypatch) -
     assert runtime_auth is None
     assert metrics is None
     assert config["auth_required"] is True
+    assert config["trusted_proxy_auth_required"] is False
     assert config["artifact_root"] == "artifacts"
     assert config["scenario_config_dir"] == "artifacts/configs/scenarios"
     assert config["grafana_url"].endswith("/d/origami-overview?orgId=1")
@@ -119,6 +123,56 @@ def test_metrics_can_require_token(monkeypatch) -> None:
     assert missing is not None
     assert missing.status_code == 401
     assert allowed is None
+
+
+def test_trusted_proxy_auth_requires_actor_header_for_protected_routes(monkeypatch) -> None:
+    monkeypatch.setenv("ORIGAMI_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("ORIGAMI_API_TOKEN", "internal-token")
+    monkeypatch.setenv("ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED", "true")
+
+    missing_actor = _auth_error_response(
+        _request("/runs/scenario", {"X-Origami-Token": "internal-token"}, method="POST")
+    )
+    anonymous_actor = _auth_error_response(
+        _request(
+            "/api/scenarios",
+            {
+                "X-Origami-Token": "internal-token",
+                "X-Origami-Actor": "anonymous",
+            },
+            method="POST",
+        )
+    )
+    allowed = _auth_error_response(
+        _request(
+            "/runs/scenario",
+            {
+                "X-Origami-Token": "internal-token",
+                "X-Origami-Actor": "alice@company.com",
+            },
+            method="POST",
+        )
+    )
+
+    assert missing_actor is not None
+    assert missing_actor.status_code == 401
+    assert json.loads(missing_actor.body)["detail"] == "Trusted proxy identity required"
+    assert anonymous_actor is not None
+    assert anonymous_actor.status_code == 401
+    assert allowed is None
+
+
+def test_trusted_proxy_auth_does_not_require_actor_for_metrics(monkeypatch) -> None:
+    monkeypatch.setenv("ORIGAMI_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("ORIGAMI_API_TOKEN", "internal-token")
+    monkeypatch.setenv("ORIGAMI_METRICS_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED", "true")
+    settings = load_settings()
+
+    response = _auth_error_response(_request("/metrics", {"X-Origami-Token": "internal-token"}))
+
+    assert _path_requires_proxy_identity("/metrics", settings) is False
+    assert response is None
 
 
 def test_request_context_helpers_capture_actor_request_id_and_source_ip() -> None:

@@ -146,6 +146,7 @@ def runtime_config(request: Request = None) -> dict[str, Any]:
         "environment": settings.environment,
         "auth_required": settings.auth_required,
         "metrics_auth_required": settings.metrics_auth_required,
+        "trusted_proxy_auth_required": settings.trusted_proxy_auth_required,
         "artifact_root": str(settings.artifact_root),
         "scenario_config_dir": str(settings.scenario_config_dir),
         "current_user_id": current_user_id,
@@ -659,6 +660,17 @@ def _auth_error_response(request: Request) -> JSONResponse | None:
 
     supplied_token = _request_token(request)
     if supplied_token and secrets.compare_digest(supplied_token, settings.api_token):
+        if settings.trusted_proxy_auth_required and _path_requires_proxy_identity(
+            request.url.path,
+            settings,
+        ):
+            actor = request.headers.get(settings.actor_header, "").strip()
+            if _safe_user_id(actor) in {"", "anonymous", "token-authenticated", "token_authenticated"}:
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Trusted proxy identity required"},
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
         return None
 
     return JSONResponse(
@@ -690,6 +702,12 @@ def _path_requires_auth(path: str, settings: OrigamiSettings) -> bool:
         path == prefix or path.startswith(f"{prefix}/")
         for prefix in protected_prefixes
     )
+
+
+def _path_requires_proxy_identity(path: str, settings: OrigamiSettings) -> bool:
+    if path == "/metrics":
+        return False
+    return _path_requires_auth(path, settings)
 
 
 def _request_token(request: Request) -> str:

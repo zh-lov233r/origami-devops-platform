@@ -93,6 +93,20 @@ docker compose --env-file .env.production -f docker-compose.prod.yml logs -f api
 docker compose --env-file .env.production -f docker-compose.prod.yml down
 ```
 
+For Google Workspace / Gmail SSO, run the production stack with the SSO overlay:
+
+```bash
+docker compose \
+  --env-file .env.production \
+  -f docker-compose.prod.yml \
+  -f docker-compose.sso.yml \
+  up -d --build
+```
+
+The overlay adds oauth2-proxy and Nginx in front of the API. After Google login,
+Nginx injects `X-Origami-Actor` from the authenticated email and the internal
+API token. See `docs/google_workspace_sso.md`.
+
 ## Run Artifacts
 
 Scenario, multi-step scenario, and benchmark runs now receive a unique `run_id`.

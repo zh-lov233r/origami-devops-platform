@@ -12,6 +12,10 @@ def _prod_compose() -> dict:
     return yaml.safe_load(Path("docker-compose.prod.yml").read_text())
 
 
+def _sso_compose() -> dict:
+    return yaml.safe_load(Path("docker-compose.sso.yml").read_text())
+
+
 def test_production_dockerfile_uses_locked_non_root_runtime() -> None:
     dockerfile = Path("Dockerfile").read_text()
 
@@ -78,9 +82,60 @@ def test_production_grafana_and_env_example_require_controlled_credentials() -> 
     assert "GRAFANA_ADMIN_PASSWORD=replace-with-strong-password" in env_example
     assert "ORIGAMI_RUN_RETENTION_LIMIT=500" in env_example
     assert "ORIGAMI_SCENARIO_CONFIG_DIR=/var/lib/origami/artifacts/configs/scenarios" in env_example
+    assert "ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED=true" in env_example
     assert compose["services"]["api"]["environment"]["ORIGAMI_RUN_RETENTION_LIMIT"] == (
         "${ORIGAMI_RUN_RETENTION_LIMIT:-500}"
     )
     assert compose["services"]["api"]["environment"]["ORIGAMI_SCENARIO_CONFIG_DIR"] == (
         "${ORIGAMI_SCENARIO_CONFIG_DIR:-/var/lib/origami/artifacts/configs/scenarios}"
     )
+
+
+def test_sso_compose_adds_google_workspace_auth_proxy() -> None:
+    compose = _sso_compose()
+    services = compose["services"]
+    oauth_env = services["oauth2-proxy"]["environment"]
+    api_env = services["api"]["environment"]
+
+    assert services["oauth2-proxy"]["image"] == "quay.io/oauth2-proxy/oauth2-proxy:v7.15.2"
+    assert services["sso-proxy"]["image"] == "nginx:1.29.8-alpine"
+    assert api_env["ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED"] == (
+        "${ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED:-true}"
+    )
+    assert api_env["ORIGAMI_ACTOR_HEADER"] == "X-Origami-Actor"
+
+    assert oauth_env["OAUTH2_PROXY_PROVIDER"] == "google"
+    assert oauth_env["OAUTH2_PROXY_EMAIL_DOMAINS"] == (
+        "${GOOGLE_WORKSPACE_DOMAIN:?Set GOOGLE_WORKSPACE_DOMAIN}"
+    )
+    assert oauth_env["OAUTH2_PROXY_SET_XAUTHREQUEST"] == "true"
+    assert oauth_env["OAUTH2_PROXY_PASS_USER_HEADERS"] == "true"
+    assert oauth_env["OAUTH2_PROXY_UPSTREAMS"] == "static://202"
+    assert services["sso-proxy"]["ports"] == ["${ORIGAMI_SSO_BIND:-127.0.0.1:8080}:8080"]
+    assert "configs/auth/nginx/origami-sso.conf.template" in services["sso-proxy"]["volumes"][0]
+    assert "scripts/render_nginx_sso_config.sh" in services["sso-proxy"]["volumes"][1]
+    assert services["sso-proxy"]["command"] == [
+        "/bin/sh",
+        "/usr/local/bin/render_nginx_sso_config.sh",
+    ]
+
+
+def test_nginx_sso_template_injects_only_trusted_identity_headers() -> None:
+    template = Path("configs/auth/nginx/origami-sso.conf.template").read_text()
+
+    assert "auth_request /oauth2/auth;" in template
+    assert "location = /api/health" in template
+    assert "auth_request_set $email $upstream_http_x_auth_request_email;" in template
+    assert "proxy_set_header X-Origami-Actor $email;" in template
+    assert 'proxy_set_header X-Origami-Token "__ORIGAMI_API_TOKEN__";' in template
+    assert 'proxy_set_header Authorization "";' in template
+    assert 'proxy_set_header X-Auth-Request-Email "";' in template
+    assert "proxy_pass http://api:8000;" in template
+
+
+def test_nginx_sso_render_script_replaces_api_token_placeholder() -> None:
+    script = Path("scripts/render_nginx_sso_config.sh").read_text()
+
+    assert "ORIGAMI_API_TOKEN" in script
+    assert "__ORIGAMI_API_TOKEN__" in script
+    assert "exec nginx -g" in script

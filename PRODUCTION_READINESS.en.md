@@ -193,6 +193,9 @@ Acceptance criteria:
 - [x] API/Dashboard write operations are authenticated.
 - [x] Report, audit, and history read policy is defined.
 - [x] Production Grafana does not use anonymous admin.
+- [x] Google Workspace SSO reverse-proxy template is available: oauth2-proxy + Nginx.
+- [x] API can require trusted proxy-injected user identity headers.
+- [ ] Google OAuth client, company domain, and optional Google Group policy are configured in the real environment.
 - [ ] Production access is limited to internal networks or VPN.
 - [x] Critical operations record actor and request id.
 
