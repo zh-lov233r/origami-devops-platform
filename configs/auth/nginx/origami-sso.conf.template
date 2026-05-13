@@ -12,7 +12,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Scheme $scheme;
-        proxy_set_header X-Auth-Request-Redirect $scheme://$host$request_uri;
+        proxy_set_header X-Auth-Request-Redirect $scheme://$http_host$request_uri;
     }
 
     location = /oauth2/auth {
@@ -27,7 +27,7 @@ server {
     }
 
     location @oauth2_signin {
-        return 302 /oauth2/start?rd=$scheme://$host$request_uri;
+        return 302 /oauth2/start?rd=$scheme://$http_host$request_uri;
     }
 
     location = /api/health {

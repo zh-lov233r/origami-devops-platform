@@ -114,6 +114,9 @@ def test_sso_compose_adds_google_workspace_auth_proxy() -> None:
     assert services["sso-proxy"]["ports"] == ["${ORIGAMI_SSO_BIND:-127.0.0.1:8080}:8080"]
     assert "configs/auth/nginx/origami-sso.conf.template" in services["sso-proxy"]["volumes"][0]
     assert "scripts/render_nginx_sso_config.sh" in services["sso-proxy"]["volumes"][1]
+    assert "/etc/nginx/conf.d" in services["sso-proxy"]["tmpfs"]
+    assert services["sso-proxy"]["cap_drop"] == ["ALL"]
+    assert services["sso-proxy"]["cap_add"] == ["CHOWN", "SETGID", "SETUID"]
     assert services["sso-proxy"]["command"] == [
         "/bin/sh",
         "/usr/local/bin/render_nginx_sso_config.sh",
@@ -125,6 +128,8 @@ def test_nginx_sso_template_injects_only_trusted_identity_headers() -> None:
 
     assert "auth_request /oauth2/auth;" in template
     assert "location = /api/health" in template
+    assert "X-Auth-Request-Redirect $scheme://$http_host$request_uri;" in template
+    assert "return 302 /oauth2/start?rd=$scheme://$http_host$request_uri;" in template
     assert "auth_request_set $email $upstream_http_x_auth_request_email;" in template
     assert "proxy_set_header X-Origami-Actor $email;" in template
     assert 'proxy_set_header X-Origami-Token "__ORIGAMI_API_TOKEN__";' in template
