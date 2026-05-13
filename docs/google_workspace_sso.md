@@ -70,6 +70,22 @@ docker compose \
 Open `https://origami.internal` through the internal DNS / TLS endpoint that
 routes to `ORIGAMI_SSO_BIND`.
 
+## Dry Run
+
+Run the local SSO smoke check before changing SSO deployment settings:
+
+```bash
+make sso-dry-run
+```
+
+The script starts `docker-compose.prod.yml` with `docker-compose.sso.yml` and
+dummy OAuth credentials, then checks:
+
+- `/api/health` is reachable through the SSO proxy.
+- unauthenticated `/dashboard` traffic redirects to oauth2-proxy.
+- direct API access with only `X-Origami-Token` is rejected.
+- simulated trusted proxy identity headers activate per-user scenario storage.
+
 ## Security Notes
 
 - Do not expose the API container directly to browsers.

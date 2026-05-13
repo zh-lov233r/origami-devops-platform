@@ -236,6 +236,7 @@ jobs:
     timeout-minutes: 15
     needs:
       - production-image
+      - sso-dry-run
     if: github.ref == 'refs/heads/main'
     environment:
       name: staging
@@ -260,12 +261,27 @@ jobs:
         if: always()
         run: docker compose --env-file .env.production.example -f docker-compose.prod.yml down
 
+  sso-dry-run:
+    name: SSO Dry Run
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - production-image
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run local SSO dry run
+        run: scripts/sso_dry_run_smoke.sh
+
   internal-production-approval:
     name: Internal Production Approval
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs:
       - production-image
+      - sso-dry-run
     if: startsWith(github.ref, 'refs/tags/v')
     environment:
       name: internal-production

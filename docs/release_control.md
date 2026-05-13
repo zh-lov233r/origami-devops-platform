@@ -19,6 +19,7 @@ manual dispatch. It includes:
 - production Docker image build
 - image SBOM generation
 - Trivy image scan for fixable high and critical vulnerability findings
+- local SSO dry run with the Google Workspace oauth2-proxy/Nginx overlay
 - release manifest artifact with version, git SHA, image identifier, migration notes, and rollback command
 
 The production Dockerfile applies Debian security updates during image build and
@@ -32,6 +33,12 @@ yet have a fixed package version.
 After a push to `main`, the workflow runs a staging smoke check through the
 production compose profile. The smoke script verifies API health, runtime config,
 custom scenario creation, and a single scenario run with a passing quality gate.
+
+The release gate also runs `scripts/sso_dry_run_smoke.sh`. This starts the
+production compose profile with the SSO overlay and dummy OAuth credentials,
+then verifies that the SSO ingress is healthy, unauthenticated browser traffic
+redirects to oauth2-proxy, direct token-only API access is rejected, and trusted
+proxy identity headers activate per-user storage isolation.
 
 When real staging infrastructure is available, replace the compose build/start
 steps with the internal deployment command and keep `scripts/staging_smoke.sh` as

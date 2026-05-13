@@ -37,10 +37,17 @@ def test_release_gate_contains_phase4_jobs() -> None:
         "quality",
         "dependency-scan",
         "production-image",
+        "sso-dry-run",
         "staging-smoke",
         "internal-production-approval",
     } <= set(jobs)
+    assert jobs["sso-dry-run"]["needs"] == ["production-image"]
+    assert jobs["staging-smoke"]["needs"] == ["production-image", "sso-dry-run"]
     assert jobs["staging-smoke"]["environment"]["name"] == "staging"
+    assert jobs["internal-production-approval"]["needs"] == [
+        "production-image",
+        "sso-dry-run",
+    ]
     assert jobs["internal-production-approval"]["environment"]["name"] == "internal-production"
 
 
@@ -56,6 +63,7 @@ def test_release_gate_runs_quality_scans_image_build_and_smoke() -> None:
     assert "image-sbom.cdx.json" in workflow_text
     assert "trivy-image.sarif" in workflow_text
     assert "scripts/staging_smoke.sh" in workflow_text
+    assert "scripts/sso_dry_run_smoke.sh" in workflow_text
     assert "scripts/write_release_manifest.sh" in workflow_text
 
 
@@ -64,9 +72,11 @@ def test_release_scripts_are_executable_and_manifest_records_release_metadata(
 ) -> None:
     manifest_script = Path.cwd() / "scripts/write_release_manifest.sh"
     smoke_script = Path.cwd() / "scripts/staging_smoke.sh"
+    sso_dry_run_script = Path.cwd() / "scripts/sso_dry_run_smoke.sh"
 
     assert os.access(manifest_script, os.X_OK)
     assert os.access(smoke_script, os.X_OK)
+    assert os.access(sso_dry_run_script, os.X_OK)
 
     subprocess.run(
         [
