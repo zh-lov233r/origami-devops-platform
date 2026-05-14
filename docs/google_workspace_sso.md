@@ -31,7 +31,7 @@ Create a Google OAuth web application for the internal host:
 Save the client id and client secret into `.env.production`.
 
 For staging, use a separate OAuth web client and follow
-`docs/staging_deployment.md`.
+`docs/staging_google_oauth_client.md` plus `docs/staging_deployment.md`.
 
 ## Required Environment
 
@@ -49,6 +49,7 @@ OAUTH2_PROXY_REDIRECT_URL=https://origami.internal/oauth2/callback
 OAUTH2_PROXY_COOKIE_DOMAINS=origami.internal
 OAUTH2_PROXY_WHITELIST_DOMAINS=origami.internal
 GOOGLE_WORKSPACE_DOMAIN=yourcompany.com
+OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE=
 ```
 
 Generate the cookie secret with a cryptographically strong random value, for
@@ -101,6 +102,9 @@ For a real staging endpoint, run `scripts/staging_sso_smoke.sh` as described in
   token-only requests that do not include a trusted actor header.
 - Prometheus `/metrics` can still be token-protected without requiring a user
   actor, so service monitoring does not need a human identity.
+- For temporary staging with a single Gmail account, prefer
+  `OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE` over
+  `GOOGLE_WORKSPACE_DOMAIN=gmail.com`.
 
 ## Optional Group Restriction
 

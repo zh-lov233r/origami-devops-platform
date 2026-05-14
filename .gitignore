@@ -12,6 +12,7 @@ __pycache__/
 .env.*
 !.env.example
 !.env.*.example
+configs/auth/oauth2-proxy/authenticated-emails.txt
 artifacts/**/*.json
 artifacts/**/*.jsonl
 artifacts/**/*.md

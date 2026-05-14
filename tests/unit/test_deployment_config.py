@@ -94,6 +94,11 @@ def test_production_grafana_and_env_example_require_controlled_credentials() -> 
 def test_staging_package_documents_sso_deployment_inputs() -> None:
     staging_env = Path(".env.staging.example").read_text()
     runbook = Path("docs/staging_deployment.md").read_text()
+    oauth_doc = Path("docs/staging_google_oauth_client.md").read_text()
+    preflight_script = Path("scripts/staging_host_preflight.sh").read_text()
+    allowlist_example = Path(
+        "configs/auth/oauth2-proxy/authenticated-emails.txt.example"
+    ).read_text()
     smoke_script = Path("scripts/staging_sso_smoke.sh").read_text()
 
     assert "ORIGAMI_ENV=staging" in staging_env
@@ -101,11 +106,30 @@ def test_staging_package_documents_sso_deployment_inputs() -> None:
     assert "ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED=true" in staging_env
     assert "OAUTH2_PROXY_REDIRECT_URL=https://origami-staging.internal/oauth2/callback" in staging_env
     assert "ORIGAMI_STAGING_BASE_URL=https://origami-staging.internal" in staging_env
+    assert "GOOGLE_WORKSPACE_DOMAIN=" in staging_env
+    assert "OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE=/etc/oauth2-proxy/authenticated-emails.txt" in staging_env
 
     assert "scripts/staging_sso_smoke.sh" in runbook
+    assert "scripts/staging_host_preflight.sh" in runbook
+    assert "docs/staging_google_oauth_client.md" in runbook
+    assert "GOOGLE_WORKSPACE_DOMAIN=gmail.com" in runbook
+    assert "ziyue.ingen@gmail.com" in runbook
     assert "Manual Acceptance" in runbook
     assert "Rollback" in runbook
     assert "Backup Notes" in runbook
+
+    assert "Authorized JavaScript origin" in oauth_doc
+    assert "https://origami-staging.internal/oauth2/callback" in oauth_doc
+    assert "redirect_uri_mismatch" in oauth_doc
+    assert "authenticated-emails.txt" in oauth_doc
+    assert "ziyue.ingen@gmail.com" in oauth_doc
+
+    assert "ORIGAMI_STAGING_HOSTNAME" in preflight_script
+    assert "docker compose" in preflight_script
+    assert "OAUTH2_PROXY_REDIRECT_URL" in preflight_script
+    assert "authenticated-emails.txt" in preflight_script
+
+    assert "ziyue.ingen@gmail.com" in allowlist_example
 
     assert "ORIGAMI_STAGING_BASE_URL" in smoke_script
     assert "/api/health" in smoke_script
@@ -128,11 +152,17 @@ def test_sso_compose_adds_google_workspace_auth_proxy() -> None:
 
     assert oauth_env["OAUTH2_PROXY_PROVIDER"] == "google"
     assert oauth_env["OAUTH2_PROXY_EMAIL_DOMAINS"] == (
-        "${GOOGLE_WORKSPACE_DOMAIN:?Set GOOGLE_WORKSPACE_DOMAIN}"
+        "${GOOGLE_WORKSPACE_DOMAIN:-}"
+    )
+    assert oauth_env["OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE"] == (
+        "${OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE:-}"
     )
     assert oauth_env["OAUTH2_PROXY_SET_XAUTHREQUEST"] == "true"
     assert oauth_env["OAUTH2_PROXY_PASS_USER_HEADERS"] == "true"
     assert oauth_env["OAUTH2_PROXY_UPSTREAMS"] == "static://202"
+    assert "./configs/auth/oauth2-proxy:/etc/oauth2-proxy:ro" in (
+        services["oauth2-proxy"]["volumes"]
+    )
     assert services["sso-proxy"]["ports"] == ["${ORIGAMI_SSO_BIND:-127.0.0.1:8080}:8080"]
     assert "configs/auth/nginx/origami-sso.conf.template" in services["sso-proxy"]["volumes"][0]
     assert "scripts/render_nginx_sso_config.sh" in services["sso-proxy"]["volumes"][1]

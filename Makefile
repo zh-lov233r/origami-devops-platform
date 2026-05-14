@@ -4,7 +4,7 @@
 PYTHONPATH ?= src
 PYTHON ?= .venv/bin/python
 
-.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify sso-dry-run staging-sso-smoke
+.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify sso-dry-run staging-host-preflight staging-sso-smoke
 
 lint:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m ruff check src tests
@@ -46,6 +46,9 @@ audit-verify:
 
 sso-dry-run:
 	PYTHON=$(PYTHON) scripts/sso_dry_run_smoke.sh
+
+staging-host-preflight:
+	scripts/staging_host_preflight.sh
 
 staging-sso-smoke:
 	scripts/staging_sso_smoke.sh
