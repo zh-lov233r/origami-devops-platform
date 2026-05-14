@@ -44,6 +44,9 @@ When real staging infrastructure is available, replace the compose build/start
 steps with the internal deployment command and keep `scripts/staging_smoke.sh` as
 the post-deploy health check.
 
+Use `docs/staging_deployment.md` and `scripts/staging_sso_smoke.sh` to validate
+the real staging SSO edge before inviting internal developers.
+
 ## Internal Production
 
 Tags matching `v*` create a production candidate. The

@@ -228,7 +228,9 @@ v0.1 上线成功意味着平台可以作为内部开发者仿真验证服务稳
 - [x] CI release gate 已包含生产镜像构建、依赖扫描、镜像扫描和 SBOM。
 - [x] tag release 已绑定 internal-production 手动审批 environment。
 - [x] release manifest 会记录版本、git SHA、镜像标识、迁移说明和回滚命令。
-- [ ] 真实 staging 环境 smoke check 通过。
+- [x] 真实 staging 准备包已存在：env 模板、部署 runbook、SSO smoke 脚本。
+- [ ] 真实 staging SSO smoke check 通过。
+- [ ] 真实 staging 浏览器登录和用户隔离验收通过。
 
 ### Operations
 
@@ -236,7 +238,8 @@ v0.1 上线成功意味着平台可以作为内部开发者仿真验证服务稳
 - [ ] Grafana dashboard 可访问。
 - [ ] 关键告警接入团队渠道。
 - [ ] structured logs 包含 request id / run id。
-- [ ] runbook 已写完并演练。
+- [x] staging deploy / smoke / rollback runbook 已写完。
+- [ ] runbook 已在真实 staging 上演练。
 - [ ] artifacts/history/audit 有备份恢复说明。
 
 ## 发布节奏建议

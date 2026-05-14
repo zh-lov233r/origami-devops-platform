@@ -30,6 +30,9 @@ Create a Google OAuth web application for the internal host:
 
 Save the client id and client secret into `.env.production`.
 
+For staging, use a separate OAuth web client and follow
+`docs/staging_deployment.md`.
+
 ## Required Environment
 
 Copy `.env.production.example` to `.env.production` and set:
@@ -85,6 +88,9 @@ dummy OAuth credentials, then checks:
 - unauthenticated `/dashboard` traffic redirects to oauth2-proxy.
 - direct API access with only `X-Origami-Token` is rejected.
 - simulated trusted proxy identity headers activate per-user scenario storage.
+
+For a real staging endpoint, run `scripts/staging_sso_smoke.sh` as described in
+`docs/staging_deployment.md`.
 
 ## Security Notes
 

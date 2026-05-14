@@ -91,6 +91,28 @@ def test_production_grafana_and_env_example_require_controlled_credentials() -> 
     )
 
 
+def test_staging_package_documents_sso_deployment_inputs() -> None:
+    staging_env = Path(".env.staging.example").read_text()
+    runbook = Path("docs/staging_deployment.md").read_text()
+    smoke_script = Path("scripts/staging_sso_smoke.sh").read_text()
+
+    assert "ORIGAMI_ENV=staging" in staging_env
+    assert "ORIGAMI_ALLOWED_ORIGINS=https://origami-staging.internal" in staging_env
+    assert "ORIGAMI_TRUSTED_PROXY_AUTH_REQUIRED=true" in staging_env
+    assert "OAUTH2_PROXY_REDIRECT_URL=https://origami-staging.internal/oauth2/callback" in staging_env
+    assert "ORIGAMI_STAGING_BASE_URL=https://origami-staging.internal" in staging_env
+
+    assert "scripts/staging_sso_smoke.sh" in runbook
+    assert "Manual Acceptance" in runbook
+    assert "Rollback" in runbook
+    assert "Backup Notes" in runbook
+
+    assert "ORIGAMI_STAGING_BASE_URL" in smoke_script
+    assert "/api/health" in smoke_script
+    assert "/oauth2/start" in smoke_script
+    assert "accounts.google.com" in smoke_script
+
+
 def test_sso_compose_adds_google_workspace_auth_proxy() -> None:
     compose = _sso_compose()
     services = compose["services"]

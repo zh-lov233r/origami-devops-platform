@@ -73,10 +73,12 @@ def test_release_scripts_are_executable_and_manifest_records_release_metadata(
     manifest_script = Path.cwd() / "scripts/write_release_manifest.sh"
     smoke_script = Path.cwd() / "scripts/staging_smoke.sh"
     sso_dry_run_script = Path.cwd() / "scripts/sso_dry_run_smoke.sh"
+    staging_sso_script = Path.cwd() / "scripts/staging_sso_smoke.sh"
 
     assert os.access(manifest_script, os.X_OK)
     assert os.access(smoke_script, os.X_OK)
     assert os.access(sso_dry_run_script, os.X_OK)
+    assert os.access(staging_sso_script, os.X_OK)
 
     subprocess.run(
         [
