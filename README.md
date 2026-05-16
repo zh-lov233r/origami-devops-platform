@@ -166,6 +166,13 @@ See [docs/artifact_backup_restore.md](docs/artifact_backup_restore.md) for the
 backup schedule, restore rehearsal, checksum verification, and post-restore
 acceptance checks.
 
+## Structured Logs
+
+Critical API operations emit JSON `origami_api_operation` events with
+`request_id`, actor, source IP, action, status, and run ids for run-triggering
+operations. See [docs/structured_logging.md](docs/structured_logging.md) for the
+staging log queries and `scripts/validate_structured_logs.py` validator.
+
 ## Target Workflow
 
 ```text

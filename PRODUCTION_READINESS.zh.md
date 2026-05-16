@@ -237,7 +237,7 @@ v0.1 上线成功意味着平台可以作为内部开发者仿真验证服务稳
 - [ ] Prometheus 抓取 API 指标。
 - [ ] Grafana dashboard 可访问。
 - [ ] 关键告警接入团队渠道。
-- [ ] structured logs 包含 request id / run id。
+- [x] structured logs 包含 request id / run id。
 - [x] staging deploy / smoke / rollback runbook 已写完。
 - [ ] runbook 已在真实 staging 上演练。
 - [x] artifacts/history/audit 有备份恢复说明。

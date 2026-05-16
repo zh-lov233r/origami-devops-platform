@@ -235,7 +235,7 @@ Acceptance criteria:
 - [ ] Prometheus scrapes API metrics.
 - [ ] Grafana dashboard is accessible.
 - [ ] Critical alerts reach the team channel.
-- [ ] Structured logs include request id / run id.
+- [x] Structured logs include request id / run id.
 - [ ] Runbook is complete and rehearsed.
 - [x] Artifacts/history/audit backup and recovery notes exist.
 

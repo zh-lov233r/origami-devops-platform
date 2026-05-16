@@ -183,9 +183,13 @@ docker compose --env-file .env.staging -f docker-compose.prod.yml -f docker-comp
 docker compose --env-file .env.staging -f docker-compose.prod.yml -f docker-compose.sso.yml logs --tail=120 oauth2-proxy
 ```
 
-Request failures should include request ids in API logs. SSO failures usually
-belong to `oauth2-proxy` when the Google OAuth client, redirect URI, cookie
-domain, or allowed Workspace domain is wrong.
+Request failures should include request ids in API logs, and run-triggering
+operations should include run ids. Use `docs/structured_logging.md` and
+`scripts/validate_structured_logs.py --require-run-id` to validate the API log
+field contract during staging rehearsal.
+
+SSO failures usually belong to `oauth2-proxy` when the Google OAuth client,
+redirect URI, cookie domain, or allowed Workspace domain is wrong.
 
 ## Rollback
 
