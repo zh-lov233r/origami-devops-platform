@@ -240,7 +240,7 @@ v0.1 上线成功意味着平台可以作为内部开发者仿真验证服务稳
 - [ ] structured logs 包含 request id / run id。
 - [x] staging deploy / smoke / rollback runbook 已写完。
 - [ ] runbook 已在真实 staging 上演练。
-- [ ] artifacts/history/audit 有备份恢复说明。
+- [x] artifacts/history/audit 有备份恢复说明。
 
 ## 发布节奏建议
 

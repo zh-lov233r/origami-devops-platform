@@ -153,6 +153,19 @@ SBOM, scans the image for fixable high/critical vulnerabilities, records a
 release manifest, and runs a production-compose staging smoke check after pushes
 to `main`. See `docs/release_control.md` for the release and rollback path.
 
+## Artifact Backup
+
+For staging and internal production artifact recovery, use:
+
+```bash
+make artifact-backup
+ORIGAMI_RESTORE_ARCHIVE=<archive.tar.gz> make artifact-restore
+```
+
+See [docs/artifact_backup_restore.md](docs/artifact_backup_restore.md) for the
+backup schedule, restore rehearsal, checksum verification, and post-restore
+acceptance checks.
+
 ## Target Workflow
 
 ```text

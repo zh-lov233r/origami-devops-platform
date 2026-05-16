@@ -4,7 +4,7 @@
 PYTHONPATH ?= src
 PYTHON ?= .venv/bin/python
 
-.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify sso-dry-run staging-host-preflight staging-sso-smoke
+.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify artifact-backup artifact-restore sso-dry-run staging-host-preflight staging-sso-smoke
 
 lint:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m ruff check src tests
@@ -43,6 +43,12 @@ edge-mock:
 
 audit-verify:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m origami.cli.main audit-verify
+
+artifact-backup:
+	PYTHON=$(PYTHON) scripts/artifact_backup.sh
+
+artifact-restore:
+	PYTHON=$(PYTHON) scripts/artifact_restore.sh
 
 sso-dry-run:
 	PYTHON=$(PYTHON) scripts/sso_dry_run_smoke.sh

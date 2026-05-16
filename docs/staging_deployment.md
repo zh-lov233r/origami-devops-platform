@@ -204,11 +204,16 @@ Rollback is complete only after:
 
 ## Backup Notes
 
-Before inviting developers, define a backup location for:
+Before inviting developers, define and rehearse the backup location for:
 
 - `origami-artifacts` volume: user scenarios, run artifacts, audit bundles.
 - `grafana-data` volume: staging dashboard state.
 - `prometheus-data` volume: short-term metrics history.
 
-For v0.1 staging, a daily volume snapshot is enough if the retention window and
-restore owner are documented.
+For the Origami artifact volume, use `scripts/artifact_backup.sh` and
+`scripts/artifact_restore.sh`. The detailed restore rehearsal and production
+restore checklist lives in `docs/artifact_backup_restore.md`.
+
+For v0.1 staging, a daily artifact backup or volume snapshot is enough if the
+retention window, restore owner, and latest restore rehearsal result are
+documented.

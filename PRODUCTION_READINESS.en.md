@@ -237,7 +237,7 @@ Acceptance criteria:
 - [ ] Critical alerts reach the team channel.
 - [ ] Structured logs include request id / run id.
 - [ ] Runbook is complete and rehearsed.
-- [ ] Artifacts/history/audit backup and recovery notes exist.
+- [x] Artifacts/history/audit backup and recovery notes exist.
 
 ## Recommended Release Cadence
 
