@@ -26,5 +26,7 @@ artifacts/**/*.pt
 artifacts/**/*.pth
 artifacts/**/*.png
 artifacts/**/*.pdf
+artifacts/.cache/
+artifacts/security/pip-audit-cache/
 artifacts/.locks/
 artifacts/**/.locks/

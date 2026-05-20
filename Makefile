@@ -3,8 +3,12 @@
 
 PYTHONPATH ?= src
 PYTHON ?= .venv/bin/python
+UV ?= .venv/bin/uv
+UV_CACHE_DIR ?= artifacts/.cache/uv
+PIP_AUDIT ?= .venv/bin/pip-audit
+PIP_AUDIT_ARGS ?= --disable-pip --cache-dir artifacts/.cache/pip-audit
 
-.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify artifact-backup artifact-restore sso-dry-run staging-host-preflight staging-sso-smoke staging-acceptance-report
+.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify dependency-scan artifact-backup artifact-restore sso-dry-run staging-host-preflight staging-sso-smoke staging-acceptance-report
 
 lint:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m ruff check src tests
@@ -43,6 +47,11 @@ edge-mock:
 
 audit-verify:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m origami.cli.main audit-verify
+
+dependency-scan:
+	mkdir -p artifacts/security artifacts/.cache
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) export --locked --no-dev --format requirements-txt --output-file artifacts/security/requirements.txt
+	$(PIP_AUDIT) --requirement artifacts/security/requirements.txt --format json --output artifacts/security/pip-audit.json $(PIP_AUDIT_ARGS)
 
 artifact-backup:
 	PYTHON=$(PYTHON) scripts/artifact_backup.sh

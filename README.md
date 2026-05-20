@@ -153,6 +153,13 @@ SBOM, scans the image for fixable high/critical vulnerabilities, records a
 release manifest, and runs a production-compose staging smoke check after pushes
 to `main`. See `docs/release_control.md` for the release and rollback path.
 
+To reproduce the runtime dependency vulnerability scan locally, install
+`pip-audit` in the active environment and run:
+
+```bash
+make dependency-scan
+```
+
 ## Artifact Backup
 
 For staging and internal production artifact recovery, use:
