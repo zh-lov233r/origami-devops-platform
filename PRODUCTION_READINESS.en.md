@@ -228,6 +228,7 @@ Acceptance criteria:
 - [x] CI release gate includes production image build, dependency scan, image scan, and SBOM.
 - [x] Tag releases are bound to the internal-production manual approval environment.
 - [x] Release manifest records version, git SHA, image identifier, migration notes, and rollback command.
+- [x] Real staging package exists: env template, deployment runbook, host preflight, OAuth single-account allowlist, SSO smoke script, and acceptance report generator.
 - [ ] Real staging environment smoke check passes.
 
 ### Operations

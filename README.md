@@ -173,6 +173,18 @@ Critical API operations emit JSON `origami_api_operation` events with
 operations. See [docs/structured_logging.md](docs/structured_logging.md) for the
 staging log queries and `scripts/validate_structured_logs.py` validator.
 
+## Staging Acceptance
+
+Generate a v0.1 staging acceptance report with:
+
+```bash
+make staging-acceptance-report
+```
+
+The report starts with pending checks and can be updated with per-item
+`--status` and `--evidence` flags after real staging smoke, browser login,
+observability, logging, backup/restore, and rollback rehearsals.
+
 ## Target Workflow
 
 ```text

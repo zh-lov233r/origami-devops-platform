@@ -173,6 +173,34 @@ After automated smoke passes, complete these checks in a browser:
 - Open `/grafana/` and confirm the overview dashboard loads.
 - Confirm Prometheus has recent API scrape data.
 
+## Acceptance Report
+
+Record the staging evidence with the acceptance report generator. Start with a
+pending report before the rehearsal:
+
+```bash
+make staging-acceptance-report
+```
+
+As checks pass, attach status and evidence:
+
+```bash
+scripts/write_staging_acceptance_report.py \
+  --base-url https://origami-staging.internal \
+  --image-ref <image-ref-or-digest> \
+  --git-sha <git-sha> \
+  --owner <restore-and-release-owner> \
+  --status sso_smoke=pass \
+  --evidence sso_smoke="scripts/staging_sso_smoke.sh passed from VPN" \
+  --status structured_logs=pass \
+  --evidence structured_logs="validate_structured_logs.py --require-run-id passed"
+```
+
+The generator writes Markdown and JSON under `artifacts/acceptance/`. Keep the
+final report with the release notes. The report should remain `pending` until
+manual browser login, user isolation, observability, structured logging,
+backup/restore, rollback, and runbook rehearsal evidence is attached.
+
 ## Logs
 
 Useful staging diagnostics:

@@ -4,7 +4,7 @@
 PYTHONPATH ?= src
 PYTHON ?= .venv/bin/python
 
-.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify artifact-backup artifact-restore sso-dry-run staging-host-preflight staging-sso-smoke
+.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify artifact-backup artifact-restore sso-dry-run staging-host-preflight staging-sso-smoke staging-acceptance-report
 
 lint:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m ruff check src tests
@@ -58,3 +58,6 @@ staging-host-preflight:
 
 staging-sso-smoke:
 	scripts/staging_sso_smoke.sh
+
+staging-acceptance-report:
+	$(PYTHON) scripts/write_staging_acceptance_report.py
