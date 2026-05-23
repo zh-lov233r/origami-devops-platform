@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,7 @@ from typing import Any
 
 VALID_STATUSES = {"pending", "pass", "fail", "blocked", "not_applicable"}
 DEFAULT_OUTPUT_DIR = Path("artifacts/acceptance")
+SAFE_ENVIRONMENT_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 @dataclass(frozen=True)
@@ -153,12 +155,7 @@ def main() -> int:
         evidence=evidence,
         notes=notes,
     )
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    json_path = output_dir / f"staging-acceptance-{payload['environment']}.json"
-    markdown_path = output_dir / f"staging-acceptance-{payload['environment']}.md"
-    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-    markdown_path.write_text(render_markdown(payload))
+    json_path, markdown_path = write_report_files(payload, Path(args.output_dir))
     print(f"Staging acceptance report written: {markdown_path}")
     print(f"Staging acceptance JSON written: {json_path}")
     print(f"Overall status: {payload['overall_status']}")
@@ -177,6 +174,7 @@ def build_report(
     evidence: dict[str, str],
     notes: dict[str, str],
 ) -> dict[str, Any]:
+    _validate_environment(environment)
     known_ids = {item.id for item in ACCEPTANCE_ITEMS}
     unknown_ids = sorted((set(statuses) | set(evidence) | set(notes)) - known_ids)
     if unknown_ids:
@@ -259,6 +257,15 @@ def render_markdown(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def write_report_files(payload: dict[str, Any], output_dir: Path) -> tuple[Path, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / f"staging-acceptance-{payload['environment']}.json"
+    markdown_path = output_dir / f"staging-acceptance-{payload['environment']}.md"
+    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    markdown_path.write_text(render_markdown(payload))
+    return json_path, markdown_path
+
+
 def _overall_status(records: list[dict[str, str]]) -> str:
     statuses = {record["status"] for record in records}
     if "fail" in statuses:
@@ -268,6 +275,13 @@ def _overall_status(records: list[dict[str, str]]) -> str:
     if "pending" in statuses:
         return "pending"
     return "pass"
+
+
+def _validate_environment(environment: str) -> None:
+    if not environment or not SAFE_ENVIRONMENT_PATTERN.fullmatch(environment):
+        raise ValueError(
+            "Invalid environment name. Use only letters, numbers, dot, underscore, and dash."
+        )
 
 
 def _parse_key_values(values: list[str], default_value: str) -> dict[str, str]:

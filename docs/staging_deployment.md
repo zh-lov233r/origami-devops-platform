@@ -175,14 +175,35 @@ After automated smoke passes, complete these checks in a browser:
 
 ## Acceptance Report
 
-Record the staging evidence with the acceptance report generator. Start with a
-pending report before the rehearsal:
+Record the staging evidence with the acceptance automation entry. During the
+staging rehearsal, collect SSO smoke evidence with:
+
+```bash
+ORIGAMI_STAGING_BASE_URL=https://origami-staging.internal \
+ORIGAMI_STAGING_DIRECT_API_URL=https://origami-api-staging.internal \
+ORIGAMI_API_TOKEN=<staging internal token> \
+make staging-acceptance
+```
+
+Add structured log validation and backup/restore rehearsal evidence when those
+artifacts are available:
+
+```bash
+scripts/run_staging_acceptance.py \
+  --base-url https://origami-staging.internal \
+  --direct-api-url https://origami-api-staging.internal \
+  --api-token <staging internal token> \
+  --structured-log-file artifacts/staging-api.log \
+  --run-backup-restore
+```
+
+To start with a blank pending report before the rehearsal, run:
 
 ```bash
 make staging-acceptance-report
 ```
 
-As checks pass, attach status and evidence:
+As manual checks pass, attach status and evidence:
 
 ```bash
 scripts/write_staging_acceptance_report.py \

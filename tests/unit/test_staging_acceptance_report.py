@@ -103,6 +103,19 @@ def test_staging_acceptance_report_rejects_unknown_or_invalid_status() -> None:
             notes={},
         )
 
+    with pytest.raises(ValueError, match="Invalid environment"):
+        build_report(
+            environment="../prod",
+            base_url="",
+            image_ref="",
+            git_sha="",
+            owner="",
+            generated_at="2026-05-20T15:00:00+00:00",
+            statuses={},
+            evidence={},
+            notes={},
+        )
+
 
 def test_staging_acceptance_report_cli_writes_json_and_markdown(tmp_path: Path) -> None:
     output_dir = tmp_path / "acceptance"
@@ -147,7 +160,12 @@ def test_staging_acceptance_report_is_documented_and_wired() -> None:
     readme = Path("README.md").read_text()
 
     assert os.access(Path("scripts/write_staging_acceptance_report.py"), os.X_OK)
+    assert os.access(Path("scripts/run_staging_acceptance.py"), os.X_OK)
+    assert "staging-acceptance:" in makefile
+    assert "$(PYTHON) scripts/run_staging_acceptance.py $(STAGING_ACCEPTANCE_ARGS)" in makefile
     assert "staging-acceptance-report" in makefile
+    assert "scripts/run_staging_acceptance.py" in staging_runbook
     assert "scripts/write_staging_acceptance_report.py" in staging_runbook
     assert "artifacts/acceptance/" in staging_runbook
+    assert "make staging-acceptance" in readme
     assert "make staging-acceptance-report" in readme

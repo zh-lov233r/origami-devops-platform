@@ -182,15 +182,28 @@ staging log queries and `scripts/validate_structured_logs.py` validator.
 
 ## Staging Acceptance
 
-Generate a v0.1 staging acceptance report with:
+Collect automated staging evidence and write a v0.1 acceptance report with:
+
+```bash
+ORIGAMI_STAGING_BASE_URL=https://origami-staging.internal make staging-acceptance
+```
+
+To run it locally without touching real staging, pass arguments through
+`STAGING_ACCEPTANCE_ARGS`:
+
+```bash
+make staging-acceptance STAGING_ACCEPTANCE_ARGS="--skip-sso-smoke"
+```
+
+Generate a blank pending report for manual rehearsal notes with:
 
 ```bash
 make staging-acceptance-report
 ```
 
-The report starts with pending checks and can be updated with per-item
-`--status` and `--evidence` flags after real staging smoke, browser login,
-observability, logging, backup/restore, and rollback rehearsals.
+The report remains pending until browser login, user isolation, observability,
+logging, backup/restore, rollback, and runbook rehearsal evidence is attached
+with per-item `--status` and `--evidence` flags.
 
 ## Target Workflow
 

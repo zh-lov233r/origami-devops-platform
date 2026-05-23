@@ -7,8 +7,9 @@ UV ?= .venv/bin/uv
 UV_CACHE_DIR ?= artifacts/.cache/uv
 PIP_AUDIT ?= .venv/bin/pip-audit
 PIP_AUDIT_ARGS ?= --disable-pip --cache-dir artifacts/.cache/pip-audit
+STAGING_ACCEPTANCE_ARGS ?=
 
-.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify dependency-scan artifact-backup artifact-restore sso-dry-run staging-host-preflight staging-sso-smoke staging-acceptance-report
+.PHONY: lint smoke scenario multistep-scenario test benchmark dashboard observability observability-build quality export edge-mock audit-verify dependency-scan artifact-backup artifact-restore sso-dry-run staging-host-preflight staging-sso-smoke staging-acceptance staging-acceptance-report
 
 lint:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m ruff check src tests
@@ -67,6 +68,9 @@ staging-host-preflight:
 
 staging-sso-smoke:
 	scripts/staging_sso_smoke.sh
+
+staging-acceptance:
+	$(PYTHON) scripts/run_staging_acceptance.py $(STAGING_ACCEPTANCE_ARGS)
 
 staging-acceptance-report:
 	$(PYTHON) scripts/write_staging_acceptance_report.py
