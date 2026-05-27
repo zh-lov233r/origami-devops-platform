@@ -117,3 +117,59 @@ def test_staging_acceptance_runner_cli_writes_report(tmp_path: Path) -> None:
     assert json_payload["overall_status"] == "pending"
     assert items["structured_logs"]["status"] == "pass"
     assert items["structured_logs"]["evidence"] == "manual log validation passed"
+
+
+def test_staging_acceptance_runner_cli_allows_blocked_report_by_default(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "acceptance"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_staging_acceptance.py",
+            "--environment",
+            "staging",
+            "--generated-at",
+            "2026-05-20T15:00:00+00:00",
+            "--output-dir",
+            str(output_dir),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    json_payload = json.loads((output_dir / "staging-acceptance-staging.json").read_text())
+
+    assert result.returncode == 0
+    assert json_payload["overall_status"] == "blocked"
+    assert "Overall status: blocked" in result.stdout
+
+
+def test_staging_acceptance_runner_cli_can_fail_on_blocked_report(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "acceptance"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_staging_acceptance.py",
+            "--environment",
+            "staging",
+            "--generated-at",
+            "2026-05-20T15:00:00+00:00",
+            "--output-dir",
+            str(output_dir),
+            "--fail-on-pending",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    json_payload = json.loads((output_dir / "staging-acceptance-staging.json").read_text())
+
+    assert result.returncode == 1
+    assert json_payload["overall_status"] == "blocked"

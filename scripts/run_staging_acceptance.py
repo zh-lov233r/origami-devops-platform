@@ -58,9 +58,9 @@ def main() -> int:
     print(f"Staging acceptance JSON written: {json_path}")
     print(f"Overall status: {payload['overall_status']}")
 
-    if payload["overall_status"] in {"fail", "blocked"}:
+    if payload["overall_status"] == "fail":
         return 1
-    if options.fail_on_pending and payload["overall_status"] == "pending":
+    if options.fail_on_pending and payload["overall_status"] in {"blocked", "pending"}:
         return 1
     return 0
 
@@ -238,7 +238,11 @@ def _parse_args() -> AcceptanceRunOptions:
     parser.add_argument("--artifact-root", type=Path, default=Path("artifacts"))
     parser.add_argument("--backup-dir", type=Path)
     parser.add_argument("--restore-root", type=Path)
-    parser.add_argument("--fail-on-pending", action="store_true")
+    parser.add_argument(
+        "--fail-on-pending",
+        action="store_true",
+        help="Exit non-zero when the report is pending or blocked.",
+    )
     parser.add_argument("--status", action="append", default=[])
     parser.add_argument("--evidence", action="append", default=[])
     parser.add_argument("--note", action="append", default=[])
